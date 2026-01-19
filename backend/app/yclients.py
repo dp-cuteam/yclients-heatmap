@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass
+from typing import Any
+
+import requests
+
+from .config import settings
+
+
+@dataclass
+class YClientsClient:
+    base_url: str
+    partner_token: str
+    user_token: str | None = None
+    timeout: int = 30
+    retries: int = 3
+
+    def _headers(self) -> dict[str, str]:
+        auth = f"Bearer {self.partner_token}"
+        if self.user_token:
+            auth = f"{auth}, User {self.user_token}"
+        return {
+            "Accept": "application/vnd.yclients.v2+json",
+            "Content-Type": "application/json",
+            "Authorization": auth,
+        }
+
+    def _request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
+        url = f"{self.base_url}{path}"
+        last_err = None
+        for attempt in range(1, self.retries + 1):
+            try:
+                resp = requests.request(
+                    method,
+                    url,
+                    headers=self._headers(),
+                    params=params,
+                    timeout=self.timeout,
+                )
+                if resp.status_code >= 500:
+                    raise RuntimeError(f"Server error {resp.status_code}")
+                data = resp.json()
+                if data.get("success") is False:
+                    raise RuntimeError(data.get("meta") or data)
+                if resp.status_code >= 400:
+                    raise RuntimeError(data.get("meta") or data)
+                return data
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                time.sleep(min(2 ** attempt, 10))
+        raise RuntimeError(f"YCLIENTS request failed: {last_err}")
+
+    def get_records(
+        self,
+        company_id: int,
+        start_date: str,
+        end_date: str,
+        page: int,
+        count: int = 50,
+    ) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/api/v1/records/{company_id}",
+            params={
+                "page": page,
+                "count": count,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        )
+
+    def get_staff(self, company_id: int) -> dict[str, Any]:
+        # staff_id = 0 means all staff
+        return self._request(
+            "GET",
+            f"/api/v1/company/{company_id}/staff/0",
+        )
+
+    def get_companies(self) -> dict[str, Any]:
+        return self._request("GET", "/api/v1/companies")
+
+
+def build_client() -> YClientsClient:
+    if not settings.yclients_partner_token:
+        raise RuntimeError("Missing YCLIENTS partner token")
+    return YClientsClient(
+        base_url=settings.yclients_base_url,
+        partner_token=settings.yclients_partner_token,
+        user_token=settings.yclients_user_token,
+        timeout=settings.yclients_timeout,
+        retries=settings.yclients_retries,
+    )

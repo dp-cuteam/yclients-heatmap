@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CUTEAM Heatmap</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">CUTEAM</div>
+          <h1>Теплокарта загрузки</h1>
+          <p class="subtitle">Фактические визиты 2025 • YCLIENTS</p>
+        </div>
+        <form method="post" action="/logout">
+          <button class="ghost" type="submit">Выйти</button>
+        </form>
+      </header>
+
+      <section class="filters">
+        <div class="field">
+          <label>Месяц</label>
+          <select id="monthSelect"></select>
+        </div>
+        <div class="field">
+          <label>Филиал</label>
+          <select id="branchSelect"></select>
+        </div>
+        <div class="field">
+          <label>Группа ресурсов</label>
+          <select id="groupSelect"></select>
+        </div>
+        <div class="field">
+          <label>Неделя</label>
+          <select id="weekSelect"></select>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <div class="metric-card">
+          <span class="metric-label">Средняя за день (неделя)</span>
+          <span id="avgDay" class="metric-value">—</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Средняя за неделю</span>
+          <span id="avgWeek" class="metric-value">—</span>
+        </div>
+        <div class="metric-card accent">
+          <span class="metric-label">Средняя за месяц</span>
+          <span id="avgMonth" class="metric-value">—</span>
+        </div>
+      </section>
+
+      <section class="heatmap-section">
+        <div class="section-header">
+          <h2>Недельная теплокарта</h2>
+          <div class="legend">
+            <span>0%</span>
+            <div class="legend-bar"></div>
+            <span>100%</span>
+          </div>
+        </div>
+        <div class="heatmap-scroll">
+          <div id="heatmap" class="heatmap-grid"></div>
+        </div>
+        <div class="gray-zone">
+          <div class="gray-title">Серая зона</div>
+          <div class="gray-rows">
+            <div class="gray-row">
+              <span>До 10:00</span>
+              <div id="grayEarly" class="gray-cells"></div>
+            </div>
+            <div class="gray-row">
+              <span>После 22:00</span>
+              <div id="grayLate" class="gray-cells"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
