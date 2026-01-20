@@ -1,6 +1,6 @@
 # CUTEAM Heatmap
 
-Веб‑приложение для отображения недельной теплокарты загрузки ресурсов по фактическим визитам YCLIENTS за 2025 год.
+Веб‑приложение для отображения теплокарты загрузки ресурсов по фактическим визитам YCLIENTS за 2025 год (месяц целиком с группировкой по неделям).
 
 ## Быстрый старт (локально)
 
@@ -15,12 +15,19 @@ pip install -r requirements.txt
 ```
 YCLIENTS_PARTNER_TOKEN=...
 YCLIENTS_USER_TOKEN=...          # опционально
+YCLIENTS_BASE_URL=https://api.yclients.com
+YCLIENTS_TIMEOUT=30
+YCLIENTS_RETRIES=3
 SESSION_SECRET=...
 ADMIN_USER=admin
 ADMIN_PASS=...
 ADMIN2_USER=admin2
 ADMIN2_PASS=...
 APP_TIMEZONE=Europe/Moscow
+DATA_DIR=./data
+DB_PATH=./data/app.db
+GROUP_CONFIG_PATH=./config/groups.json
+GROUP_CONFIG_RESOLVED_PATH=./config/groups_resolved.json
 ```
 
 Запуск:
@@ -45,6 +52,13 @@ uvicorn backend.app.main:app --reload
 
 Ежедневный ETL запускается планировщиком в 06:00 (Europe/Moscow).
 
+## Диагностика YCLIENTS
+
+Экран диагностики: `/admin/diagnostics`
+
+Проверяет токены, доступ к филиалам, сотрудникам и записям за день.
+Логи пишутся в `data/logs/` и доступны для скачивания на странице диагностики.
+
 ## Деплой (Render)
 
 Используется `Procfile`:
@@ -52,4 +66,3 @@ uvicorn backend.app.main:app --reload
 ```
 web: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
 ```
-"# yclients-heatmap" 

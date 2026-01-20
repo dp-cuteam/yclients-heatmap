@@ -1,99 +1,123 @@
-﻿Ниже — понятное объяснение всей логики по слоям, с привязкой к файлам.
+﻿ИНСТРУКЦИЯ (обновлённая)
 
-1) Конфиг групп и сопоставление staff_id
-- Исходник групп — `config/groups.json`. Это результат парсинга `группировка.xlsx`: там только названия ресурсов и `company_id`.
-- В рантайме ETL вызывает `resolve_staff_ids()` в `backend/app/groups.py`:
-  - Берёт список филиалов из YCLIENTS (`/api/v1/companies`) и подставляет `display_name`, если он пустой или равен ID.
-  - Для каждого филиала запрашивает сотрудников (`/api/v1/company/{company_id}/staff/0`).
-  - Мапит `staff_id` по точному совпадению имени из `staff_names`.
-  - Если совпадений нет или их несколько — пишет warning.
-- Результат сохраняется в `config/groups_resolved.json`. При последующих запусках берётся он (если существует).
+1) Назначение
+Приложение CUTEAM Heatmap показывает загрузку ресурсов по фактическим визитам YCLIENTS за 2025 год. Дашборд отображает месяц целиком, разбитый на недели (Пн–Вс), с итогами по дням, неделям и месяцу.
 
-Файлы: `config/groups.json`, `config/groups_resolved.json`, `backend/app/groups.py`
+2) Основные разделы UI
+- Вход: /login
+- Дашборд (теплокарта): /
+- Админка ETL: /admin
+- Диагностика YCLIENTS: /admin/diagnostics
 
-2) Токены и настройки
-- Конфиг читается в `backend/app/config.py`.
-- `api token.txt` используется как `YCLIENTS_PARTNER_TOKEN`, если переменная не задана.
-- При необходимости добавляется `YCLIENTS_USER_TOKEN` (если API требует).
-- Там же задаются админ‑логины/пароли, таймзона, путь к БД и к конфигу.
+3) Настройка токенов
+Нужны:
+- Partner token (общий)
+- User token (с правами на все 5 филиалов)
 
-Файл: `backend/app/config.py`
+Рекомендуется хранить в .env:
+YCLIENTS_PARTNER_TOKEN=...
+YCLIENTS_USER_TOKEN=...
 
-3) База данных и таблицы
-- Инициализация в `backend/app/db.py`.
-- Таблицы:
-  - `raw_records` — сырые записи из YCLIENTS (фильтруем только факт посещения).
-  - `staff_hour_busy` — факт занятости по часам для каждого staff.
-  - `group_hour_load` — агрегаты по группам (busy_count, load_pct, in_benchmark).
-  - `etl_runs` — статус/прогресс ETL.
+Либо partner token можно оставить в файле:
+C:\Codex\Дашборд\api token.txt
+(в файле должна быть ровно 1 строка — только токен, без лишних слов)
 
-Файл: `backend/app/db.py`
+4) Переменные окружения (.env)
+Пример:
+YCLIENTS_PARTNER_TOKEN=...
+YCLIENTS_USER_TOKEN=...
+YCLIENTS_BASE_URL=https://api.yclients.com
+YCLIENTS_TIMEOUT=30
+YCLIENTS_RETRIES=3
+SESSION_SECRET=...
+ADMIN_USER=admin
+ADMIN_PASS=...
+ADMIN2_USER=admin2
+ADMIN2_PASS=...
+APP_TIMEZONE=Europe/Moscow
+DATA_DIR=./data
+DB_PATH=./data/app.db
+GROUP_CONFIG_PATH=./config/groups.json
+GROUP_CONFIG_RESOLVED_PATH=./config/groups_resolved.json
 
-4) Бизнес‑правила и расчёт занятости
-В `backend/app/etl.py`:
-- Факт визита: учитываются `attendance` ∈ {1, 2}. Если `attendance` отсутствует, берём `visit_attendance`.
-- Часовая занятость: если запись пересекает час — час считается занятым целиком.
-- Benchmark‑окно: 10:00–21:59 (часы 10–21).
-- Серая зона: <10 и ≥22 не влияет на проценты, но флаг есть для индикаторов.
+5) Запуск локально
+- Активировать venv
+- Запустить:
+  uvicorn backend.app.main:app --reload
 
-5) ETL: full_2025
-- `run_full_2025()`:
-  1) Загружает/резолвит группы (staff_id + display_name филиалов).
-  2) По каждому филиалу берёт записи за 2025 (`/api/v1/records/{company_id}`).
-  3) Фильтрует по attendance и формирует `raw_records`.
-  4) Строит `staff_hour_busy`.
-  5) Строит `group_hour_load`.
-- Прогресс и статус пишет в `etl_runs`.
+6) Диагностика YCLIENTS (важно)
+URL: /admin/diagnostics
 
-Файл: `backend/app/etl.py`
+На странице:
+A) Статус конфигурации
+- Партнёрский токен (маскирован)
+- Пользовательский токен (маскирован)
+- Часовой пояс
+- Среда (Local/Render)
+- Последняя попытка
+Кнопка: «Запустить проверку»
 
-6) ETL: daily (06:00)
-- `run_daily()`:
-  - Работает только за вчера (по `Europe/Moscow`).
-  - Пересчитывает `staff_hour_busy` и `group_hour_load` только за этот день.
-- Планировщик на APScheduler с cron 06:00.
+B) Результаты тестов (таблица)
+- Доступ по токену
+- Филиалы доступны
+- Конфигурация групп (JSON + BOM-safe)
+- Сотрудники/ресурсы доступны
+- Записи за день
 
-Файлы: `backend/app/etl.py`, `backend/app/scheduler.py`
+Поля:
+- Статус (ОК / Ошибка / Предупреждение)
+- HTTP код
+- Время ответа
+- Сообщение (по-русски)
+- Детали (JSON, без токенов)
 
-7) REST API для фронта
-Реализовано в `backend/app/main.py`:
-- `GET /api/branches` — филиалы.
-- `GET /api/branches/{branch_id}/groups` — группы филиала.
-- `GET /api/months/YYYY-MM/weeks` — список недель.
-- `GET /api/heatmap` — 7×12 матрица (10–21), + серые индикаторы.
-- `GET /api/summary/month` — средние (день/неделя/месяц).
-- Admin:
-  - `POST /api/admin/etl/full_2025/start`
-  - `GET /api/admin/etl/status`
+C) Логи
+- Логи диагностики пишутся в data/logs/yclients_diag_YYYY-MM-DD.log
+- Кнопка: «Показать последние 200 строк»
+- Кнопка: «Скачать лог»
 
-Файл: `backend/app/main.py`
+7) Дашборд: логика месяца
+Фильтры:
+- Месяц
+- Филиал
+- Группа ресурсов
 
-8) Авторизация
-- Cookie‑сессия (12 часов) через middleware.
-- Пользователи `admin` и `admin2` берутся из env.
+Отображение:
+- Месяц целиком блоками недель (Пн–Вс)
+- Внутри недели: строки по дням, колонки по часам 10–21
+- Итог дня (средняя за 10–21)
+- Итог недели (средняя за 10–21)
+- Итог месяца (средняя за 10–21)
+- Серая зона (<10 и >=22) показывает только факт наличия брони и НЕ влияет на проценты
 
-Файлы: `backend/app/main.py`, `backend/app/auth.py`
+8) ETL
+Полная загрузка 2025:
+POST /api/admin/etl/full_2025/start
 
-9) Фронтенд
-- Шаблоны на Jinja, чистый JS.
-- Дашборд:
-  - Фильтры (месяц/филиал/группа/неделя).
-  - Теплокарта 7×12.
-  - Серые индикаторы (до 10 и после 22).
-  - Средние метрики.
-- Админка:
-  - Кнопка запуска полного ETL.
-  - Статус/прогресс/лог ошибок.
+Статус:
+GET /api/admin/etl/status
 
-Файлы:
-`backend/app/templates/dashboard.html`
-`backend/app/templates/admin.html`
-`backend/app/static/app.js`
-`backend/app/static/admin.js`
-`backend/app/static/styles.css`
+Ежедневный ETL запускается планировщиком в 06:00 (Europe/Moscow).
 
-10) Как проходит полный цикл
-1) Вход в админку.
-2) Запуск full ETL.
-3) ETL формирует `groups_resolved.json` и заполняет БД.
-4) Дашборд читает API и рисует теплокарту.
+9) Вебхук (требование YCLIENTS)
+Эндпоинт для вебхуков:
+POST /api/webhooks/yclients
+
+Нужен публичный HTTPS URL:
+- Render: https://<app>.onrender.com/api/webhooks/yclients
+- ngrok: https://<id>.ngrok.io/api/webhooks/yclients
+
+10) BOM-safe для конфигов
+Все JSON-конфиги читаются с encoding="utf-8-sig". Ошибка BOM устранена.
+
+11) Типичные ошибки
+- Таймаут к api.yclients.com → проблема сети/доступа (см. диагностику)
+- 401 → неверный токен
+- 403 → нет прав пользователя
+- 404 → неверный endpoint или branch_id
+- 429 → лимиты
+
+12) Render деплой
+- Используется Procfile:
+  web: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+- В Render задать все переменные из .env

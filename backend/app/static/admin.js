@@ -19,7 +19,12 @@ async function refreshStatus() {
     errorsEl.textContent = "";
     return;
   }
-  statusEl.textContent = data.status || "—";
+  const statusMap = {
+    running: "Выполняется",
+    success: "Успешно",
+    failed: "Ошибка",
+  };
+  statusEl.textContent = statusMap[data.status] || data.status || "—";
   progressEl.textContent = data.progress || "—";
   timeEl.textContent = data.finished_at || data.started_at || "—";
   errorsEl.textContent = data.error_log || "";

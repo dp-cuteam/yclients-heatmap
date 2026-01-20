@@ -16,4 +16,4 @@ def authenticate(username: str, password: str) -> bool:
 def require_admin(request: Request) -> None:
     user = request.session.get("user")
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
