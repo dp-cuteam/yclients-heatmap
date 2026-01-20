@@ -32,22 +32,11 @@
           <label>Филиал</label>
           <select id="branchSelect"></select>
         </div>
-        <div class="field">
-          <label>Группа ресурсов</label>
-          <select id="groupSelect"></select>
-        </div>
-      </section>
-
-      <section class="metrics">
-        <div class="metric-card">
-          <span class="metric-label">Средняя за месяц</span>
-          <span id="avgMonth" class="metric-value">—</span>
-        </div>
       </section>
 
       <section class="heatmap-section">
         <div class="section-header">
-          <h2>Месяц целиком (недели Пн–Вс)</h2>
+          <h2>Месяц целиком (строки — время, столбцы — дни)</h2>
           <div class="legend">
             <span>0%</span>
             <div class="legend-bar"></div>
@@ -56,9 +45,6 @@
         </div>
         <p class="subtitle">Серая зона: слева точка — до 10:00, справа — после 22:00.</p>
         <div id="monthContainer" class="month-container"></div>
-        <div class="month-summary">
-          Средняя загрузка месяца: <span id="avgMonthBottom">—</span>
-        </div>
       </section>
     </div>
 

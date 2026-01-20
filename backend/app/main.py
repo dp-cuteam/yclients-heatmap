@@ -18,6 +18,7 @@ from .diagnostics import run_diagnostics, _latest_log_info
 from .etl import run_full_2025
 from .groups import load_group_config
 from .scheduler import start_scheduler, stop_scheduler
+from .staff_audit import run_staff_audit
 from .utils import daterange, week_start_monday
 from .yclients import build_client
 
@@ -78,6 +79,13 @@ def diagnostics_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse("diagnostics.html", {"request": request})
+
+
+@app.get("/admin/staff-slots", response_class=HTMLResponse)
+def staff_slots_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("staff_slots.html", {"request": request})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -451,6 +459,26 @@ def api_diagnostics_log_download(request: Request):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Лог не найден")
     return FileResponse(path)
+
+
+@app.post("/api/admin/staff-slots/run")
+def api_staff_slots_run(request: Request, payload: dict = Body(default={})):
+    require_admin(request)
+    branch_id = payload.get("branch_id")
+    day = payload.get("date")
+    try:
+        branch_id = int(branch_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="РќРµ Р·Р°РґР°РЅ branch_id") from exc
+    if day:
+        try:
+            date.fromisoformat(day)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РґР°С‚Р°") from exc
+    try:
+        return run_staff_audit(branch_id=branch_id, day=day)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/health")

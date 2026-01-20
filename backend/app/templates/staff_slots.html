@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CUTEAM · Проверка филиала</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">CUTEAM</div>
+          <h1>Проверка филиала</h1>
+          <p class="subtitle">Сотрудники и завершённые записи за выбранный день</p>
+        </div>
+        <div class="actions">
+          <a class="ghost" href="/admin">Админка</a>
+          <a class="ghost" href="/admin/diagnostics">Диагностика</a>
+          <a class="ghost" href="/">К теплокарте</a>
+          <form method="post" action="/logout">
+            <button class="ghost" type="submit">Выйти</button>
+          </form>
+        </div>
+      </header>
+
+      <section class="audit-panel">
+        <div class="audit-grid">
+          <div class="field">
+            <label>Филиал (ID)</label>
+            <input type="number" id="auditBranch" placeholder="например 1213086" />
+          </div>
+          <div class="field">
+            <label>Дата (по умолчанию вчера)</label>
+            <input type="date" id="auditDate" />
+          </div>
+        </div>
+        <div class="audit-actions">
+          <button id="auditRun" class="primary">Запросить список</button>
+          <span id="auditStatus" class="audit-status">—</span>
+        </div>
+        <div id="auditSummary" class="audit-summary">Выберите филиал и нажмите «Запросить список».</div>
+      </section>
+
+      <section id="auditResults" class="audit-results"></section>
+    </div>
+
+    <script src="/static/staff_slots.js"></script>
+  </body>
+</html>
