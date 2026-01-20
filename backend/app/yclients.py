@@ -72,11 +72,18 @@ class YClientsClient:
         )
 
     def get_staff(self, company_id: int) -> dict[str, Any]:
-        # staff_id = 0 means all staff
-        return self._request(
-            "GET",
-            f"/api/v1/company/{company_id}/staff/0",
-        )
+        # staff_id = 0 means all staff (primary endpoint)
+        try:
+            return self._request(
+                "GET",
+                f"/api/v1/company/{company_id}/staff/0",
+            )
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            # Fallback to deprecated endpoint if API rejects staff_id=0
+            if "masterId" in msg or "staff_id" in msg or "400" in msg or "422" in msg:
+                return self._request("GET", f"/api/v1/staff/{company_id}")
+            raise
 
     def get_companies(self) -> dict[str, Any]:
         return self._request("GET", "/api/v1/companies")
