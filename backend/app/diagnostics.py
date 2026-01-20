@@ -261,6 +261,10 @@ def run_diagnostics(branch_id: int | None = None, day: str | None = None, staff_
     # Test 3: staff list
     if branch_id:
         staff_resp = _request("GET", f"/api/v1/company/{branch_id}/staff/0")
+        if staff_resp["status_code"] in {400, 422}:
+            text = staff_resp["text"] or ""
+            if "masterId" in text or "staff_id" in text:
+                staff_resp = _request("GET", f"/api/v1/staff/{branch_id}")
         staff_sample = []
         if staff_resp["json"] and isinstance(staff_resp["json"].get("data"), list):
             for item in staff_resp["json"]["data"][:20]:
