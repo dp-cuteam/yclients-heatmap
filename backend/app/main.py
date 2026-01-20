@@ -17,6 +17,11 @@ from .db import get_conn, init_db
 from .diagnostics import run_diagnostics, _latest_log_info
 from .etl import run_full_2025
 from .groups import load_group_config
+from .historical import (
+    list_branches as hist_list_branches,
+    list_months as hist_list_months,
+    month_payload as hist_month_payload,
+)
 from .scheduler import start_scheduler, stop_scheduler
 from .staff_audit import run_staff_audit
 from .utils import daterange, week_start_monday
@@ -60,11 +65,30 @@ def _get_group(branch_id: int, group_id: str) -> dict:
     return group
 
 
+def _branch_start_date(branch_id: int) -> date | None:
+    if settings.branch_start_date is None:
+        return None
+    if settings.active_branch_ids and branch_id not in settings.active_branch_ids:
+        return None
+    return settings.branch_start_date
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    branch_start = settings.branch_start_date.isoformat() if settings.branch_start_date else ""
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "branch_start_date": branch_start},
+    )
+
+
+@app.get("/historical", response_class=HTMLResponse)
+def historical_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("historical.html", {"request": request})
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -79,6 +103,13 @@ def diagnostics_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse("diagnostics.html", {"request": request})
+
+
+@app.get("/staff-types", response_class=HTMLResponse)
+def staff_types_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("staff_types.html", {"request": request})
 
 
 @app.get("/admin/staff-slots", response_class=HTMLResponse)
@@ -117,6 +148,41 @@ def api_branches(request: Request):
         for b in config.get("branches", [])
     ]
     return {"branches": branches}
+
+
+@app.get("/api/historical/branches")
+def api_historical_branches(request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    try:
+        branches = hist_list_branches()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"branches": branches}
+
+
+@app.get("/api/historical/branches/{branch_id}/months")
+def api_historical_months(branch_id: int, request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    try:
+        months = hist_list_months(branch_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"months": months}
+
+
+@app.get("/api/historical/month")
+def api_historical_month(branch_id: int, month: str, request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    try:
+        payload = hist_month_payload(branch_id, month)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return payload
 
 
 @app.get("/api/branches/{branch_id}/groups")
@@ -162,6 +228,12 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Некорректная дата начала недели") from exc
     week_end = week_start_date + timedelta(days=6)
+    effective_start = week_start_date
+    branch_start = _branch_start_date(branch_id)
+    if branch_start and branch_start > effective_start:
+        effective_start = branch_start
+    if effective_start > week_end:
+        return {"week_start": week_start_date.isoformat(), "hours": list(range(10, 22)), "days": []}
     group = _get_group(branch_id, group_id)
     staff_ids = [int(x) for x in group.get("staff_ids", [])]
 
@@ -175,7 +247,7 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
             FROM group_hour_load
             WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
             """,
-            (branch_id, group_id, week_start_date.isoformat(), week_end.isoformat()),
+            (branch_id, group_id, effective_start.isoformat(), week_end.isoformat()),
         )
         rows = cur.fetchall()
         by_day_hour = {(r["date"], int(r["hour"])): r for r in rows}
@@ -192,7 +264,7 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
                   AND busy_flag = 1
                   AND (hour < 10 OR hour >= 22)
                 """,
-                [branch_id, *staff_ids, week_start_date.isoformat(), week_end.isoformat()],
+                [branch_id, *staff_ids, effective_start.isoformat(), week_end.isoformat()],
             )
             for r in cur2.fetchall():
                 key = r["date"]
@@ -203,7 +275,7 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
                 else:
                     gray[key]["late"] = True
 
-    for day in daterange(week_start_date, week_end):
+    for day in daterange(effective_start, week_end):
         day_str = day.isoformat()
         cells = []
         for hour in hours:
@@ -242,6 +314,12 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Некорректный месяц") from exc
     last_day = (date(year, mon + 1, 1) - timedelta(days=1)) if mon < 12 else date(year, 12, 31)
+    effective_start = first
+    branch_start = _branch_start_date(branch_id)
+    if branch_start and branch_start > effective_start:
+        effective_start = branch_start
+    if effective_start > last_day:
+        return {"month": month, "hours": list(range(10, 22)), "weeks": [], "month_avg": 0.0}
 
     group = _get_group(branch_id, group_id)
     staff_ids = [int(x) for x in group.get("staff_ids", [])]
@@ -254,7 +332,7 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
             FROM group_hour_load
             WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
             """,
-            (branch_id, group_id, first.isoformat(), last_day.isoformat()),
+            (branch_id, group_id, effective_start.isoformat(), last_day.isoformat()),
         )
         rows = cur.fetchall()
         by_day_hour = {(r["date"], int(r["hour"])): r for r in rows}
@@ -271,7 +349,7 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
                   AND busy_flag = 1
                   AND (hour < 10 OR hour >= 22)
                 """,
-                [branch_id, *staff_ids, first.isoformat(), last_day.isoformat()],
+                [branch_id, *staff_ids, effective_start.isoformat(), last_day.isoformat()],
             )
             for r in cur2.fetchall():
                 key = r["date"]
@@ -284,7 +362,7 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
 
     days_map = {}
     all_vals = []
-    for day in daterange(first, last_day):
+    for day in daterange(effective_start, last_day):
         day_str = day.isoformat()
         cells = []
         for hour in hours:
@@ -313,13 +391,13 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
 
     # build week blocks (Monday-Sunday), include only days within month
     weeks = []
-    current = week_start_monday(first)
+    current = week_start_monday(effective_start)
     while current <= last_day:
         week_end = current + timedelta(days=6)
         week_days = []
         week_vals = []
         for day in daterange(current, week_end):
-            if day < first or day > last_day:
+            if day < effective_start or day > last_day:
                 continue
             day_str = day.isoformat()
             day_obj = days_map[day_str]
@@ -461,6 +539,48 @@ def api_diagnostics_log_download(request: Request):
     return FileResponse(path)
 
 
+@app.get("/api/branches/{branch_id}/staff-types")
+def api_staff_types(branch_id: int, request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="РќРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ")
+    config = load_group_config()
+    branch = next((b for b in config.get("branches", []) if int(b["branch_id"]) == branch_id), None)
+    if not branch:
+        raise HTTPException(status_code=404, detail="Р¤РёР»РёР°Р» РЅРµ РЅР°Р№РґРµРЅ")
+    type_map = {}
+    type_list = []
+    for group in branch.get("groups", []):
+        type_name = group.get("name") or group.get("group_id")
+        type_list.append(type_name)
+        for staff_name in group.get("staff_names", []):
+            if staff_name:
+                type_map[staff_name.strip()] = type_name
+
+    client = build_client()
+    staff_resp = client.get_staff(branch_id)
+    staff_list = []
+    for item in staff_resp.get("data") or []:
+        staff_id = item.get("id")
+        if staff_id is None:
+            continue
+        name = (item.get("name") or "").strip()
+        staff_list.append(
+            {
+                "id": staff_id,
+                "name": name,
+                "type": type_map.get(name) or "Не классифицирован",
+                "specialization": item.get("specialization") or "",
+                "position": (item.get("position") or {}).get("title") or "",
+            }
+        )
+    staff_list.sort(key=lambda s: (s.get("type") or "", s.get("name") or "", s.get("id") or 0))
+    return {
+        "branch_id": branch_id,
+        "types": type_list,
+        "staff": staff_list,
+    }
+
+
 @app.post("/api/admin/staff-slots/run")
 def api_staff_slots_run(request: Request, payload: dict = Body(default={})):
     require_admin(request)
@@ -477,6 +597,8 @@ def api_staff_slots_run(request: Request, payload: dict = Body(default={})):
             raise HTTPException(status_code=400, detail="РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РґР°С‚Р°") from exc
     try:
         return run_staff_audit(branch_id=branch_id, day=day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

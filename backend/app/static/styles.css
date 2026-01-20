@@ -636,6 +636,71 @@ input {
   color: var(--muted);
 }
 
+.staff-panel {
+  background: var(--shell);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+
+.staff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.staff-types {
+  display: grid;
+  gap: 16px;
+}
+
+.type-card {
+  background: #fff;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.type-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.type-list {
+  display: grid;
+  gap: 10px;
+}
+
+.type-row {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f7f2ec;
+}
+
+.type-row.empty {
+  color: var(--muted);
+}
+
+.type-name {
+  font-weight: 600;
+}
+
+.type-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 @media (max-width: 768px) {
   .topbar {
     flex-direction: column;

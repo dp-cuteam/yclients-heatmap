@@ -40,14 +40,18 @@ function buildMonths() {
     "Декабрь",
   ];
   monthSelect.innerHTML = "";
-  names.forEach((name, idx) => {
-    const value = `2025-${String(idx + 1).padStart(2, "0")}`;
+  const startValue = window.BRANCH_START_DATE || "2025-01-01";
+  const startDate = new Date(startValue);
+  const startMonth = Number.isNaN(startDate.getTime()) ? 1 : startDate.getMonth() + 1;
+  for (let idx = startMonth; idx <= 12; idx += 1) {
+    const name = names[idx - 1];
+    const value = `2025-${String(idx).padStart(2, "0")}`;
     const opt = document.createElement("option");
     opt.value = value;
     opt.textContent = `${name} 2025`;
     monthSelect.appendChild(opt);
-  });
-  monthSelect.value = "2025-01";
+  }
+  monthSelect.value = `2025-${String(startMonth).padStart(2, "0")}`;
 }
 
 async function fetchJSON(url) {

@@ -264,6 +264,11 @@ def run_full_2025(client: YClientsClient) -> str:
         for branch in resolved.get("branches", []):
             branch_id = int(branch["branch_id"])
             start_date = date(2025, 1, 1)
+            if settings.branch_start_date and (
+                not settings.active_branch_ids or branch_id in settings.active_branch_ids
+            ):
+                if settings.branch_start_date > start_date:
+                    start_date = settings.branch_start_date
             end_date = date(2025, 12, 31)
 
             def progress_cb(bid, page, total):
@@ -300,6 +305,8 @@ def run_daily(client: YClientsClient, target_day: date | None = None) -> str:
 
         for branch in resolved.get("branches", []):
             branch_id = int(branch["branch_id"])
+            if settings.branch_start_date and target_day < settings.branch_start_date:
+                continue
 
             def progress_cb(bid, page, total):
                 _update_run(run_id, progress=f"{bid}: page {page}")

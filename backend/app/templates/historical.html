@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CUTEAM · Теплокарта</title>
+    <title>CUTEAM · Исторические данные</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -11,14 +11,13 @@
       <header class="topbar">
         <div>
           <div class="eyebrow">CUTEAM</div>
-          <h1>Теплокарта загрузки</h1>
-          <p class="subtitle">Фактические визиты 2025 • YCLIENTS</p>
+          <h1>Исторические данные</h1>
+          <p class="subtitle">Тепловая карта из Excel-архива</p>
         </div>
         <div class="actions">
-          <a class="ghost" href="/admin">Админка</a>
-          <a class="ghost" href="/historical">Исторические данные</a>
+          <a class="ghost" href="/">К теплокарте</a>
           <a class="ghost" href="/staff-types">Сотрудники</a>
-          <a class="ghost" href="/admin/diagnostics">Диагностика</a>
+          <a class="ghost" href="/admin">Админка</a>
           <form method="post" action="/logout">
             <button class="ghost" type="submit">Выйти</button>
           </form>
@@ -27,32 +26,29 @@
 
       <section class="filters">
         <div class="field">
-          <label>Месяц</label>
-          <select id="monthSelect"></select>
+          <label>Филиал</label>
+          <select id="histBranch"></select>
         </div>
         <div class="field">
-          <label>Филиал</label>
-          <select id="branchSelect"></select>
+          <label>Месяц</label>
+          <select id="histMonth"></select>
         </div>
       </section>
 
       <section class="heatmap-section">
         <div class="section-header">
-          <h2>Месяц целиком (строки — время, столбцы — дни)</h2>
+          <h2>Исторические данные (строки — время, столбцы — дни)</h2>
           <div class="legend">
             <span>0%</span>
             <div class="legend-bar"></div>
             <span>100%</span>
           </div>
         </div>
-        <p class="subtitle">Серая зона: слева точка — до 10:00, справа — после 22:00.</p>
-        <div id="monthContainer" class="month-container"></div>
+        <p class="subtitle">Источник: файл Excel. Данные отображаются отдельно от основного отчёта.</p>
+        <div id="histContainer" class="month-container"></div>
       </section>
     </div>
 
-    <script>
-      window.BRANCH_START_DATE = "{{ branch_start_date }}";
-    </script>
-    <script src="/static/app.js"></script>
+    <script src="/static/historical.js"></script>
   </body>
 </html>

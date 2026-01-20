@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -64,6 +64,14 @@ def _default_day() -> str:
 
 def run_staff_audit(branch_id: int, day: str | None = None) -> dict[str, Any]:
     target_day = day or _default_day()
+    if settings.branch_start_date and (
+        not settings.active_branch_ids or branch_id in settings.active_branch_ids
+    ):
+        day_obj = date.fromisoformat(target_day)
+        if day_obj < settings.branch_start_date:
+            raise ValueError(
+                f"Данные доступны начиная с {settings.branch_start_date.isoformat()}"
+            )
     client = build_client()
 
     staff_resp = client.get_staff(branch_id)

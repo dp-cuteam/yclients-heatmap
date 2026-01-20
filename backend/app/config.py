@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,6 +17,31 @@ def _read_token_file(path: Path) -> str | None:
         return None
     content = path.read_text(encoding="utf-8-sig").strip()
     return content or None
+
+
+def _parse_int_list(value: str | None) -> list[int] | None:
+    if not value:
+        return None
+    raw = value.replace(";", ",").replace(" ", ",")
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        return None
+    items = []
+    for part in parts:
+        try:
+            items.append(int(part))
+        except ValueError:
+            continue
+    return items or None
+
+
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -35,6 +61,9 @@ class Settings:
     admin2_pass: str
     session_secret: str
     timezone: str
+    active_branch_ids: list[int] | None
+    branch_start_date: date | None
+    historical_excel_path: Path
 
 
 def load_settings() -> Settings:
@@ -62,6 +91,16 @@ def load_settings() -> Settings:
 
     session_secret = os.getenv("SESSION_SECRET", "dev-secret-change-me")
     timezone = os.getenv("APP_TIMEZONE", "Europe/Moscow")
+    active_branch_ids = _parse_int_list(
+        os.getenv("ACTIVE_BRANCH_IDS") or os.getenv("ACTIVE_BRANCH_ID")
+    )
+    branch_start_date = _parse_date(os.getenv("BRANCH_START_DATE"))
+    historical_excel_path = Path(
+        os.getenv(
+            "HISTORICAL_EXCEL_PATH",
+            BASE_DIR / "Загруженность площадки (тепловая карта).xlsx",
+        )
+    )
 
     return Settings(
         data_dir=data_dir,
@@ -79,6 +118,9 @@ def load_settings() -> Settings:
         admin2_pass=admin2_pass,
         session_secret=session_secret,
         timezone=timezone,
+        active_branch_ids=active_branch_ids,
+        branch_start_date=branch_start_date,
+        historical_excel_path=historical_excel_path,
     )
 
 

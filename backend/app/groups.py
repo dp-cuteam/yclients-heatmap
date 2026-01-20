@@ -18,8 +18,15 @@ def _load_json(path: Path) -> dict:
 
 def load_group_config() -> dict:
     if settings.group_resolved_path.exists():
-        return _load_json(settings.group_resolved_path)
-    return _load_json(settings.group_config_path)
+        data = _load_json(settings.group_resolved_path)
+    else:
+        data = _load_json(settings.group_config_path)
+    if settings.active_branch_ids:
+        allowed = set(settings.active_branch_ids)
+        data["branches"] = [
+            b for b in data.get("branches", []) if int(b.get("branch_id", 0)) in allowed
+        ]
+    return data
 
 
 def save_group_config(config: dict) -> None:
