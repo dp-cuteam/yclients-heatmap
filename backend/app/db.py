@@ -187,6 +187,26 @@ def init_db() -> None:
             );
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS mini_app_audit (
+                created_at TEXT NOT NULL,
+                action TEXT NOT NULL,
+                branch_id INTEGER NOT NULL,
+                record_id INTEGER NOT NULL,
+                service_id INTEGER,
+                good_id INTEGER,
+                amount REAL,
+                price REAL,
+                storage_id INTEGER,
+                tg_user_id TEXT,
+                tg_username TEXT,
+                tg_name TEXT,
+                status TEXT NOT NULL,
+                error TEXT
+            );
+            """
+        )
         conn.commit()
 
 

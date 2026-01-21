@@ -839,3 +839,276 @@ input {
     grid-template-columns: 90px repeat(12, minmax(46px, 1fr)) 90px 70px;
   }
 }
+
+/* Mini app */
+.mini-body {
+  background: radial-gradient(circle at top left, #fff7e6, transparent 45%),
+    radial-gradient(circle at bottom right, #d7f1f4, transparent 50%),
+    linear-gradient(120deg, #fff7ef, #f6fff8);
+}
+
+.mini-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.mini-header {
+  margin-bottom: 18px;
+}
+
+.mini-screen {
+  display: none;
+}
+
+.mini-screen.active {
+  display: block;
+}
+
+.mini-card {
+  background: var(--shell);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+}
+
+.mini-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 14px;
+  flex-wrap: wrap;
+}
+
+.mini-toggle-btn {
+  border: 1px solid #d9d2ca;
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mini-toggle-btn.active {
+  background: #ffe7dc;
+  border-color: #f0c5b3;
+  color: #7f321f;
+}
+
+.mini-list {
+  display: grid;
+  gap: 12px;
+}
+
+.mini-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 10px 4px;
+}
+
+.record-card,
+.goods-card {
+  border: 1px solid #eee3d9;
+  background: #fff;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  box-shadow: var(--shadow);
+}
+
+.record-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-time {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.record-status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f3efe9;
+  color: #6b6761;
+}
+
+.record-status.live {
+  background: #daf4e6;
+  color: #1f6d45;
+}
+
+.record-status.wait {
+  background: #fff0c7;
+  color: #8b6b0f;
+}
+
+.record-status.done {
+  background: #efe9e2;
+  color: #8a7d71;
+}
+
+.record-staff {
+  font-weight: 600;
+}
+
+.record-client {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mini-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.mini-record-title {
+  font-weight: 600;
+}
+
+.mini-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chip {
+  border: 1px solid #e3d7cc;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.goods-title {
+  font-weight: 600;
+}
+
+.goods-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mini-good-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.mini-good-title {
+  font-weight: 600;
+}
+
+.mini-good-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mini-amount {
+  display: grid;
+  gap: 8px;
+}
+
+.mini-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mini-quick button {
+  border: 1px solid #d9d2ca;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.mini-basket {
+  margin-top: 12px;
+}
+
+.mini-basket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.basket-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #efe6dd;
+}
+
+.basket-row:last-child {
+  border-bottom: none;
+}
+
+.basket-title {
+  font-weight: 600;
+}
+
+.basket-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.basket-time {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mini-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  background: #1c1a17;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  z-index: 10;
+}
+
+.mini-toast.ok {
+  background: #1f6d45;
+}
+
+.mini-toast.warn {
+  background: #8b6b0f;
+}
+
+.mini-toast.err {
+  background: #8f2d15;
+}
+
+@media (max-width: 600px) {
+  .mini-shell {
+    padding: 16px 14px 40px;
+  }
+  .record-card,
+  .goods-card {
+    padding: 12px;
+  }
+}

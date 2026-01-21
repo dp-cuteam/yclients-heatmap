@@ -27,7 +27,13 @@ class YClientsClient:
             "Authorization": auth,
         }
 
-    def _request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
         url = f"{self.base_url}{path}"
         last_err = None
         for attempt in range(1, self.retries + 1):
@@ -37,6 +43,7 @@ class YClientsClient:
                     url,
                     headers=self._headers(),
                     params=params,
+                    json=json_body,
                     timeout=self.timeout,
                 )
                 if resp.status_code >= 500:
@@ -88,6 +95,48 @@ class YClientsClient:
     def get_companies(self, my_only: bool = True) -> dict[str, Any]:
         params = {"my": 1} if my_only else None
         return self._request("GET", "/api/v1/companies", params=params)
+
+    def get_company(self, company_id: int, include: str | None = None) -> dict[str, Any]:
+        params = {"include": include} if include else None
+        return self._request("GET", f"/api/v1/company/{company_id}", params=params)
+
+    def get_record(self, company_id: int, record_id: int, include_consumables: int = 1, include_finance: int = 0) -> dict[str, Any]:
+        params = {
+            "include_consumables": include_consumables,
+            "include_finance_transactions": include_finance,
+        }
+        return self._request("GET", f"/api/v1/record/{company_id}/{record_id}", params=params)
+
+    def get_record_consumables(self, company_id: int, record_id: int) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/api/v1/technological_cards/record_consumables/{company_id}/{record_id}/",
+        )
+
+    def set_record_consumables(
+        self,
+        company_id: int,
+        record_id: int,
+        service_id: int,
+        consumables: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self._request(
+            "PUT",
+            f"/api/v1/technological_cards/record_consumables/consumables/{company_id}/{record_id}/{service_id}/",
+            json_body={"consumables": consumables},
+        )
+
+    def search_goods(self, company_id: int, term: str, count: int = 30) -> dict[str, Any]:
+        params = {
+            "term": term,
+            "count": count,
+            "search_term": term,
+            "max_count": count,
+        }
+        return self._request("GET", f"/api/v1/goods/search/{company_id}", params=params)
+
+    def get_good(self, company_id: int, good_id: int) -> dict[str, Any]:
+        return self._request("GET", f"/api/v1/goods/{company_id}/{good_id}")
 
 
 def build_client() -> YClientsClient:

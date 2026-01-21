@@ -1,0 +1,87 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CUTEAM · Лаборатория</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body class="mini-body">
+    <div class="mini-shell">
+      <header class="mini-header">
+        <div>
+          <div class="eyebrow">CUTEAM</div>
+          <h1>Лаборатория</h1>
+          <p class="subtitle">Добавление товаров в записи Yclients</p>
+        </div>
+      </header>
+
+      <section id="screenRecords" class="mini-screen active">
+        <div class="mini-card">
+          <div class="field">
+            <label>Филиал</label>
+            <select id="miniBranchSelect"></select>
+          </div>
+          <div class="mini-toggle" role="group" aria-label="Фильтр времени">
+            <button class="mini-toggle-btn active" data-mode="now" type="button">Сейчас</button>
+            <button class="mini-toggle-btn" data-mode="today" type="button">Сегодня</button>
+          </div>
+          <div class="field">
+            <label>Поиск по мастеру или клиенту</label>
+            <input id="miniRecordSearch" type="text" placeholder="Например, Анна" />
+          </div>
+        </div>
+
+        <div id="recordList" class="mini-list"></div>
+        <div id="recordEmpty" class="mini-empty">Нет активных записей на выбранный период.</div>
+      </section>
+
+      <section id="screenGoods" class="mini-screen">
+        <div class="mini-toolbar">
+          <button id="miniBack" class="ghost" type="button">Назад</button>
+          <div class="mini-record-title" id="miniRecordTitle">Запись</div>
+        </div>
+
+        <div class="mini-card mini-record-card" id="miniRecordCard"></div>
+
+        <div class="mini-card">
+          <div class="field">
+            <label>Поиск товара</label>
+            <input id="miniGoodsSearch" type="text" placeholder="Введите 2–3 символа" />
+          </div>
+          <div id="miniRecentGoods" class="mini-chips"></div>
+        </div>
+
+        <div id="goodsResults" class="mini-list"></div>
+
+        <div id="selectedGoodPanel" class="mini-card mini-good-panel">
+          <div class="mini-good-title" id="selectedGoodTitle">Товар не выбран</div>
+          <div class="mini-good-meta" id="selectedGoodMeta">—</div>
+          <div class="mini-amount">
+            <input id="goodAmount" type="number" min="0" step="0.1" placeholder="Граммы" />
+            <div class="mini-quick" id="goodQuick">
+              <button type="button" data-add="5">+5</button>
+              <button type="button" data-add="10">+10</button>
+              <button type="button" data-add="20">+20</button>
+              <button type="button" data-add="50">+50</button>
+            </div>
+          </div>
+          <button id="addGoodBtn" class="primary" type="button">Добавить в запись</button>
+        </div>
+
+        <div class="mini-card mini-basket">
+          <div class="mini-basket-header">
+            <div>В этой сессии</div>
+            <button id="undoGoodBtn" class="ghost" type="button">Отменить последнюю</button>
+          </div>
+          <div id="basketList" class="mini-basket-list"></div>
+        </div>
+
+        <div id="miniToast" class="mini-toast"></div>
+      </section>
+    </div>
+
+    <script src="/static/mini.js"></script>
+  </body>
+</html>

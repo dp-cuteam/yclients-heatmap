@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import logging
+import time
+from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, PlainTextResponse, FileResponse
@@ -33,7 +35,7 @@ from .historical import (
     list_root_files as hist_list_root_files,
 )
 from .scheduler import start_scheduler, stop_scheduler
-from .utils import daterange, week_start_monday, resource_sort_key
+from .utils import daterange, week_start_monday, resource_sort_key, parse_datetime
 from .yclients import build_client
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -80,6 +82,225 @@ def _branch_start_date(branch_id: int) -> date | None:
         return None
     return settings.branch_start_date
 
+
+class _TTLCache:
+    def __init__(self) -> None:
+        self._store: dict[str, dict[str, Any]] = {}
+
+    def get(self, key: str) -> Any | None:
+        item = self._store.get(key)
+        if not item:
+            return None
+        if item["expires_at"] <= time.time():
+            self._store.pop(key, None)
+            return None
+        return item["value"]
+
+    def set(self, key: str, value: Any, ttl_seconds: int) -> None:
+        self._store[key] = {"value": value, "expires_at": time.time() + ttl_seconds}
+
+
+_MINI_CACHE = _TTLCache()
+_MINI_SEARCH_TTL = 10 * 60
+_MINI_GOOD_TTL = 15 * 60
+_MINI_STORAGE_TTL = 60 * 60
+
+
+def _to_int(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_float(value: Any, default: float | None = None) -> float | None:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        value = value.replace(",", ".").strip()
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _record_times(record: dict) -> tuple[datetime | None, datetime | None]:
+    start_raw = record.get("datetime") or record.get("date")
+    if not start_raw:
+        return None, None
+    start_dt = parse_datetime(str(start_raw), settings.timezone)
+    duration = _to_int(record.get("seance_length") or record.get("length") or 0, 0) or 0
+    end_dt = start_dt + timedelta(seconds=duration)
+    return start_dt, end_dt
+
+
+def _record_staff_name(record: dict) -> str:
+    staff = record.get("staff") or {}
+    return _clean_text(record.get("staff_name") or staff.get("name") or record.get("staff_title") or staff.get("title"))
+
+
+def _record_client_name(record: dict) -> str:
+    client = record.get("client") or {}
+    return _clean_text(record.get("client_name") or client.get("name") or client.get("phone"))
+
+
+def _record_status(start_dt: datetime, end_dt: datetime, now: datetime) -> str:
+    if start_dt <= now <= end_dt:
+        return "В процессе"
+    if start_dt > now:
+        return "Ожидает"
+    return "Завершена"
+
+
+def _fetch_records(client, branch_id: int, start_date: date, end_date: date, max_pages: int = 10) -> list[dict]:
+    records_out: list[dict] = []
+    page = 1
+    count = 50
+    while page <= max_pages:
+        resp = client.get_records(
+            branch_id,
+            start_date=start_date.isoformat(),
+            end_date=end_date.isoformat(),
+            page=page,
+            count=count,
+        )
+        data = resp.get("data") or []
+        if not data:
+            break
+        records_out.extend(data)
+        total = (resp.get("meta") or {}).get("total_count") or 0
+        if total and page * count >= total:
+            break
+        page += 1
+    return records_out
+
+
+def _guess_price(good: dict) -> float:
+    price = _to_float(good.get("unit_actual_cost") or good.get("unit_cost"))
+    if price is not None:
+        return price
+    price = _to_float(good.get("actual_cost") or good.get("cost") or good.get("price") or 0) or 0
+    unit_equals = _to_float(good.get("unit_equals"))
+    if unit_equals and unit_equals > 0:
+        return price / unit_equals
+    return price
+
+
+def _extract_good_item(raw: dict) -> dict:
+    good_id = _to_int(raw.get("good_id") or raw.get("id"))
+    title = _clean_text(raw.get("title") or raw.get("label") or raw.get("value"))
+    unit = _clean_text(raw.get("service_unit_short_title") or raw.get("unit_short_title") or raw.get("unit") or raw.get("service_unit"))
+    price = _guess_price(raw)
+    return {
+        "good_id": good_id,
+        "title": title,
+        "unit": unit,
+        "price": price,
+    }
+
+
+def _sort_goods(items: list[dict], term: str) -> list[dict]:
+    needle = term.strip().lower()
+
+    def key(item: dict) -> tuple:
+        title = (item.get("title") or "").lower()
+        if title == needle:
+            rank = 0
+        elif title.startswith(needle):
+            rank = 1
+        elif needle in title:
+            rank = 2
+        else:
+            rank = 3
+        return (rank, title)
+
+    return sorted(items, key=key)
+
+
+def _get_storage_id(client, branch_id: int) -> int | None:
+    cache_key = f"mini:storage:{branch_id}"
+    cached = _MINI_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    resp = client.get_company(branch_id, include="storages")
+    data = resp.get("data") or {}
+    storages = data.get("storages") or []
+    if isinstance(storages, dict):
+        storages = [storages]
+    storage_id = None
+    if storages:
+        preferred = None
+        for storage in storages:
+            if storage.get("is_default") or storage.get("is_main") or storage.get("default"):
+                preferred = storage
+                break
+        if not preferred:
+            preferred = storages[0]
+        storage_id = _to_int(preferred.get("id"))
+    _MINI_CACHE.set(cache_key, storage_id, _MINI_STORAGE_TTL)
+    return storage_id
+
+
+def _audit_mini(
+    action: str,
+    branch_id: int,
+    record_id: int,
+    service_id: int | None = None,
+    good_id: int | None = None,
+    amount: float | None = None,
+    price: float | None = None,
+    storage_id: int | None = None,
+    tg_user: dict | None = None,
+    status: str = "ok",
+    error: str | None = None,
+) -> None:
+    user_id = None
+    username = None
+    name = None
+    if isinstance(tg_user, dict):
+        user_id = _clean_text(tg_user.get("id"))
+        username = _clean_text(tg_user.get("username"))
+        first = _clean_text(tg_user.get("first_name"))
+        last = _clean_text(tg_user.get("last_name"))
+        name = " ".join([part for part in [first, last] if part]).strip() or None
+    created_at = datetime.utcnow().isoformat()
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO mini_app_audit (
+                    created_at, action, branch_id, record_id, service_id, good_id,
+                    amount, price, storage_id, tg_user_id, tg_username, tg_name, status, error
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    created_at,
+                    action,
+                    branch_id,
+                    record_id,
+                    service_id,
+                    good_id,
+                    amount,
+                    price,
+                    storage_id,
+                    user_id,
+                    username,
+                    name,
+                    status,
+                    error,
+                ),
+            )
+            conn.commit()
+    except Exception:  # noqa: BLE001
+        logging.getLogger("mini_app").warning("Failed to write mini app audit log.")
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     if not request.session.get("user"):
@@ -101,6 +322,10 @@ def admin_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse("admin.html", {"request": request})
+
+@app.get("/mini", response_class=HTMLResponse)
+def mini_app_page(request: Request):
+    return templates.TemplateResponse("mini.html", {"request": request})
 
 @app.get("/admin/diagnostics", response_class=HTMLResponse)
 def diagnostics_page(request: Request):
@@ -134,6 +359,373 @@ def api_branches(request: Request):
         for b in config.get("branches", [])
     ]
     return {"branches": branches}
+
+
+@app.get("/api/mini/branches")
+def api_mini_branches():
+    client = build_client()
+    branches: list[dict] = []
+    try:
+        resp = client.get_companies()
+        for company in resp.get("data") or []:
+            branch_id = _to_int(company.get("id"))
+            if not branch_id:
+                continue
+            if settings.active_branch_ids and branch_id not in settings.active_branch_ids:
+                continue
+            title = _clean_text(company.get("title") or company.get("name") or branch_id)
+            branches.append({"branch_id": branch_id, "display_name": title})
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("mini_app").warning("Failed to load companies: %s", exc)
+        config = ensure_branch_names(load_group_config())
+        for branch in config.get("branches", []):
+            branch_id = _to_int(branch.get("branch_id"))
+            if not branch_id:
+                continue
+            branches.append(
+                {
+                    "branch_id": branch_id,
+                    "display_name": branch.get("display_name", str(branch_id)),
+                }
+            )
+    branches.sort(key=lambda item: (item["display_name"] or "").lower())
+    return {"branches": branches}
+
+
+@app.get("/api/mini/records")
+def api_mini_records(
+    branch_id: int,
+    mode: str = "now",
+    q: str = "",
+    hours: int = 4,
+    limit: int = 60,
+):
+    client = build_client()
+    tz = ZoneInfo(settings.timezone)
+    now = datetime.now(tz=tz)
+    mode = (mode or "now").lower()
+    if mode not in {"now", "today"}:
+        mode = "now"
+    hours = max(1, min(int(hours or 4), 12))
+
+    if mode == "now":
+        range_start = now - timedelta(minutes=30)
+        range_end = now + timedelta(hours=hours)
+    else:
+        today = now.date()
+        range_start = datetime.combine(today, dt_time.min).replace(tzinfo=tz)
+        range_end = datetime.combine(today, dt_time.max).replace(tzinfo=tz)
+
+    start_date = range_start.date()
+    end_date = range_end.date()
+    raw_records = _fetch_records(client, branch_id, start_date, end_date)
+
+    needle = (q or "").strip().lower()
+    records = []
+    for record in raw_records:
+        start_dt, end_dt = _record_times(record)
+        if not start_dt or not end_dt:
+            continue
+        if end_dt < range_start or start_dt > range_end:
+            continue
+        record_id = _to_int(record.get("id"))
+        if not record_id:
+            continue
+        staff_name = _record_staff_name(record)
+        client_name = _record_client_name(record)
+        if needle:
+            haystack = f"{staff_name} {client_name}".lower()
+            if needle not in haystack:
+                continue
+        status = _record_status(start_dt, end_dt, now)
+        records.append(
+            {
+                "record_id": record_id,
+                "start_dt": start_dt.isoformat(),
+                "end_dt": end_dt.isoformat(),
+                "time": start_dt.strftime("%H:%M"),
+                "staff_name": staff_name,
+                "client_name": client_name,
+                "status": status,
+            }
+        )
+
+    records.sort(key=lambda item: item["start_dt"])
+    if limit:
+        records = records[: max(1, min(int(limit), 200))]
+
+    return {
+        "records": records,
+        "now": now.isoformat(),
+        "range_start": range_start.isoformat(),
+        "range_end": range_end.isoformat(),
+    }
+
+
+@app.get("/api/mini/records/{record_id}")
+def api_mini_record_detail(record_id: int, branch_id: int):
+    client = build_client()
+    resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
+    data = resp.get("data") or {}
+    start_dt, end_dt = _record_times(data)
+    staff_name = _record_staff_name(data)
+    client_name = _record_client_name(data)
+    services = []
+    for service in data.get("services") or []:
+        service_id = _to_int(service.get("id") or service.get("service_id"))
+        if not service_id:
+            continue
+        services.append(
+            {
+                "service_id": service_id,
+                "title": _clean_text(service.get("title") or service.get("name")),
+            }
+        )
+    service_id = services[0]["service_id"] if services else None
+    storage_id = _get_storage_id(client, branch_id)
+    return {
+        "record": {
+            "record_id": record_id,
+            "start_dt": start_dt.isoformat() if start_dt else None,
+            "end_dt": end_dt.isoformat() if end_dt else None,
+            "time": start_dt.strftime("%H:%M") if start_dt else "",
+            "staff_name": staff_name,
+            "client_name": client_name,
+        },
+        "services": services,
+        "service_id": service_id,
+        "storage_id": storage_id,
+    }
+
+
+@app.get("/api/mini/goods/search")
+def api_mini_goods_search(branch_id: int, term: str, limit: int = 30):
+    term = (term or "").strip()
+    if len(term) < 2:
+        return {"items": []}
+    cache_key = f"mini:goods:{branch_id}:{term.lower()}"
+    cached = _MINI_CACHE.get(cache_key)
+    if cached is not None:
+        return {"items": cached}
+    client = build_client()
+    resp = client.search_goods(branch_id, term, count=min(int(limit or 30), 50))
+    items = []
+    for raw in resp.get("data") or []:
+        item = _extract_good_item(raw)
+        if not item.get("good_id") or not item.get("title"):
+            continue
+        items.append(item)
+    items = _sort_goods(items, term)
+    limit_val = max(1, min(int(limit or 30), 50))
+    items = items[:limit_val]
+    _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
+    return {"items": items}
+
+
+@app.post("/api/mini/records/{record_id}/goods")
+def api_mini_add_good(record_id: int, payload: dict = Body(default={})):
+    branch_id = _to_int(payload.get("branch_id"))
+    good_id = _to_int(payload.get("good_id"))
+    amount = _to_float(payload.get("amount"))
+    service_id = _to_int(payload.get("service_id"))
+    tg_user = payload.get("tg_user") or {}
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="branch_id is required")
+    if not good_id:
+        raise HTTPException(status_code=400, detail="good_id is required")
+    if amount is None or amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be positive")
+    client = build_client()
+    storage_id = _to_int(payload.get("storage_id")) or _get_storage_id(client, branch_id)
+    if not storage_id:
+        raise HTTPException(status_code=400, detail="storage_id not found for branch")
+
+    if not service_id:
+        record_resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
+        services = record_resp.get("data") or {}
+        services = services.get("services") or []
+        if services:
+            service_id = _to_int(services[0].get("id") or services[0].get("service_id"))
+    if not service_id:
+        cons_resp = client.get_record_consumables(branch_id, record_id)
+        for service in cons_resp.get("data") or []:
+            service_id = _to_int(service.get("service_id"))
+            if service_id:
+                break
+    if not service_id:
+        raise HTTPException(status_code=404, detail="service_id not found for record")
+
+    good_cache_key = f"mini:good:{branch_id}:{good_id}"
+    good_data = _MINI_CACHE.get(good_cache_key)
+    if good_data is None:
+        good_resp = client.get_good(branch_id, good_id)
+        good_data = good_resp.get("data") or {}
+        _MINI_CACHE.set(good_cache_key, good_data, _MINI_GOOD_TTL)
+    price = _guess_price(good_data)
+
+    consumables_resp = client.get_record_consumables(branch_id, record_id)
+    existing: list[dict] = []
+    for service in consumables_resp.get("data") or []:
+        if _to_int(service.get("service_id")) != service_id:
+            continue
+        for item in service.get("consumables") or []:
+            item_good_id = _to_int(item.get("good_id") or (item.get("good") or {}).get("id"))
+            if not item_good_id:
+                continue
+            existing.append(
+                {
+                    "goods_transaction_id": _to_int(item.get("goods_transaction_id"), 0) or 0,
+                    "record_id": record_id,
+                    "service_id": service_id,
+                    "storage_id": _to_int(item.get("storage_id")) or storage_id,
+                    "good_id": item_good_id,
+                    "price": _to_float(item.get("price")) or 0,
+                    "amount": _to_float(item.get("amount")) or 0,
+                }
+            )
+        break
+
+    new_item = {
+        "goods_transaction_id": 0,
+        "record_id": record_id,
+        "service_id": service_id,
+        "storage_id": storage_id,
+        "good_id": good_id,
+        "price": price,
+        "amount": amount,
+    }
+    payload_items = existing + [new_item]
+    try:
+        resp = client.set_record_consumables(branch_id, record_id, service_id, payload_items)
+    except Exception as exc:  # noqa: BLE001
+        _audit_mini(
+            "add",
+            branch_id,
+            record_id,
+            service_id=service_id,
+            good_id=good_id,
+            amount=amount,
+            price=price,
+            storage_id=storage_id,
+            tg_user=tg_user,
+            status="error",
+            error=str(exc),
+        )
+        raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
+
+    added_tx = None
+    for service in resp.get("data") or []:
+        if _to_int(service.get("service_id")) != service_id:
+            continue
+        for item in service.get("consumables") or []:
+            if _to_int(item.get("good_id")) == good_id and _to_float(item.get("amount")) == amount:
+                tx_id = _to_int(item.get("goods_transaction_id"))
+                if tx_id:
+                    added_tx = tx_id
+        break
+
+    _audit_mini(
+        "add",
+        branch_id,
+        record_id,
+        service_id=service_id,
+        good_id=good_id,
+        amount=amount,
+        price=price,
+        storage_id=storage_id,
+        tg_user=tg_user,
+        status="ok",
+    )
+
+    return {
+        "status": "ok",
+        "added": {
+            "good_id": good_id,
+            "amount": amount,
+            "price": price,
+            "goods_transaction_id": added_tx,
+        },
+    }
+
+
+@app.post("/api/mini/records/{record_id}/goods/undo")
+def api_mini_undo_good(record_id: int, payload: dict = Body(default={})):
+    branch_id = _to_int(payload.get("branch_id"))
+    service_id = _to_int(payload.get("service_id"))
+    goods_transaction_id = _to_int(payload.get("goods_transaction_id"))
+    tg_user = payload.get("tg_user") or {}
+    if not branch_id or not service_id or not goods_transaction_id:
+        raise HTTPException(status_code=400, detail="branch_id, service_id, goods_transaction_id are required")
+    client = build_client()
+    storage_id_default = _get_storage_id(client, branch_id)
+
+    consumables_resp = client.get_record_consumables(branch_id, record_id)
+    updated: list[dict] = []
+    removed = None
+    for service in consumables_resp.get("data") or []:
+        if _to_int(service.get("service_id")) != service_id:
+            continue
+        for item in service.get("consumables") or []:
+            item_tx = _to_int(item.get("goods_transaction_id"))
+            item_good_id = _to_int(item.get("good_id") or (item.get("good") or {}).get("id"))
+            if item_tx == goods_transaction_id:
+                removed = {
+                    "good_id": item_good_id,
+                    "amount": _to_float(item.get("amount")),
+                    "price": _to_float(item.get("price")),
+                    "storage_id": _to_int(item.get("storage_id")) or storage_id_default,
+                }
+                continue
+            if not item_good_id:
+                continue
+            updated.append(
+                {
+                    "goods_transaction_id": item_tx or 0,
+                    "record_id": record_id,
+                    "service_id": service_id,
+                    "storage_id": _to_int(item.get("storage_id")) or storage_id_default,
+                    "good_id": item_good_id,
+                    "price": _to_float(item.get("price")) or 0,
+                    "amount": _to_float(item.get("amount")) or 0,
+                }
+            )
+        break
+
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Позиция не найдена")
+
+    try:
+        client.set_record_consumables(branch_id, record_id, service_id, updated)
+    except Exception as exc:  # noqa: BLE001
+        _audit_mini(
+            "undo",
+            branch_id,
+            record_id,
+            service_id=service_id,
+            good_id=removed.get("good_id") if removed else None,
+            amount=removed.get("amount") if removed else None,
+            price=removed.get("price") if removed else None,
+            storage_id=removed.get("storage_id") if removed else None,
+            tg_user=tg_user,
+            status="error",
+            error=str(exc),
+        )
+        raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
+
+    _audit_mini(
+        "undo",
+        branch_id,
+        record_id,
+        service_id=service_id,
+        good_id=removed.get("good_id") if removed else None,
+        amount=removed.get("amount") if removed else None,
+        price=removed.get("price") if removed else None,
+        storage_id=removed.get("storage_id") if removed else None,
+        tg_user=tg_user,
+        status="ok",
+    )
+
+    return {"status": "ok"}
 
 
 @app.get("/api/months")
