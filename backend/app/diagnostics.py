@@ -202,7 +202,7 @@ def run_diagnostics(branch_id: int | None = None, day: str | None = None, staff_
     tests = []
 
     # Test 1: Auth check
-    auth_resp = _request("GET", "/api/v1/companies")
+    auth_resp = _request("GET", "/api/v1/companies", params={"my": 1})
     tests.append(
         {
             "name": "Доступ по токену",

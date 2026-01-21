@@ -85,8 +85,9 @@ class YClientsClient:
                 return self._request("GET", f"/api/v1/staff/{company_id}")
             raise
 
-    def get_companies(self) -> dict[str, Any]:
-        return self._request("GET", "/api/v1/companies")
+    def get_companies(self, my_only: bool = True) -> dict[str, Any]:
+        params = {"my": 1} if my_only else None
+        return self._request("GET", "/api/v1/companies", params=params)
 
 
 def build_client() -> YClientsClient:
