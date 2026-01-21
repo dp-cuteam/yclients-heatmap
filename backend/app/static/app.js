@@ -8,38 +8,93 @@ const statusCount = document.getElementById("dataCount");
 const statusNote = document.getElementById("dataNote");
 const statusRefresh = document.getElementById("dataRefresh");
 
-const colors = [
-  "#fff5f5",
-  "#ffe9e9",
-  "#ffdddd",
-  "#ffd1d1",
-  "#ffc5c5",
-  "#ffb9b9",
-  "#ffadad",
-  "#ffa1a1",
-  "#ff9595",
-  "#ff8989",
-  "#ff7d7d",
-  "#ff6f6f",
-  "#ff6161",
-  "#ff5353",
-  "#ff4545",
-  "#ff3737",
-  "#ff2929",
-  "#ff1b1b",
-  "#f11212",
-  "#d90429",
-];
+const PALETTES = {
+  perceptual: [
+    "#f7fbff",
+    "#deebf7",
+    "#c6dbef",
+    "#9ecae1",
+    "#6baed6",
+    "#41ab5d",
+    "#fee08b",
+    "#fdae61",
+    "#f46d43",
+    "#d73027",
+  ],
+  bgyor: [
+    "#edf8fb",
+    "#ccece6",
+    "#99d8c9",
+    "#66c2a4",
+    "#41ae76",
+    "#ffffcc",
+    "#fed976",
+    "#feb24c",
+    "#fd8d3c",
+    "#f03b20",
+  ],
+};
 
-const SHOW_EDGE_LABELS = false;
+const paletteInputs = document.querySelectorAll('input[name="heatmapPalette"]');
 
 function colorFor(pct) {
-  const idx = Math.max(0, Math.min(colors.length - 1, Math.floor(pct / 5)));
-  return colors[idx];
+  return getHeatColor(pct, getPaletteName());
 }
 
 function formatPct(value) {
   return `${value.toFixed(1)}%`;
+}
+
+function formatValue(value) {
+  return `${Math.round(value || 0)}`;
+}
+
+function getPaletteName() {
+  return localStorage.getItem("heatmapPalette") || "perceptual";
+}
+
+function getHeatColor(percent, paletteName) {
+  const palette = PALETTES[paletteName] || PALETTES.perceptual;
+  const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+  const bucket = Math.min(9, Math.floor(pct / 10));
+  return palette[bucket];
+}
+
+function updateLegend(paletteName) {
+  const palette = PALETTES[paletteName] || PALETTES.perceptual;
+  const stops = palette.map((c) => c).join(", ");
+  document.querySelectorAll(".legend-bar").forEach((bar) => {
+    bar.style.background = `linear-gradient(90deg, ${stops})`;
+  });
+}
+
+function applyPalette(container, paletteName) {
+  if (!container) return;
+  container.querySelectorAll(".cell").forEach((cell) => {
+    const pct = cell.dataset.pct || 0;
+    cell.style.background = getHeatColor(pct, paletteName);
+  });
+  updateLegend(paletteName);
+}
+
+function initPaletteControls() {
+  const current = getPaletteName();
+  paletteInputs.forEach((input) => {
+    input.checked = input.value === current;
+    input.addEventListener("change", () => {
+      localStorage.setItem("heatmapPalette", input.value);
+      applyPalette(monthContainer, input.value);
+    });
+  });
+  window.addEventListener("storage", (evt) => {
+    if (evt.key === "heatmapPalette") {
+      applyPalette(monthContainer, getPaletteName());
+      paletteInputs.forEach((input) => {
+        input.checked = input.value === getPaletteName();
+      });
+    }
+  });
+  updateLegend(current);
 }
 
 function buildMonths() {
@@ -109,9 +164,7 @@ function flattenDays(weeks) {
 
 function formatDayHeader(value) {
   const date = new Date(value);
-  const weekday = date.toLocaleDateString("ru-RU", { weekday: "short" });
-  const day = date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
-  return `${weekday}<br/>${day}`;
+  return date.toLocaleDateString("ru-RU", { day: "2-digit" });
 }
 
 function renderGroupMonth(group, data) {
@@ -123,7 +176,7 @@ function renderGroupMonth(group, data) {
   const groupName = group?.name || "Группа";
   header.innerHTML = `
     <div class="group-title">${groupName}</div>
-    <div class="group-meta">ID ${group?.group_id || "—"} · средняя за месяц: ${formatPct(data.month_avg || 0)}</div>
+    <div class="group-meta">ID ${group?.group_id || "—"} · средняя за месяц: ${formatValue(data.month_avg || 0)}</div>
   `;
   block.appendChild(header);
 
@@ -146,16 +199,47 @@ function renderGroupMonth(group, data) {
   grid.className = "month-grid-wide";
   grid.style.gridTemplateColumns = `72px repeat(${days.length}, var(--heatmap-cell))`;
 
+  const weekCorner = document.createElement("div");
+  weekCorner.className = "cell-head row-head corner week-head";
+  weekCorner.textContent = "";
+  grid.appendChild(weekCorner);
+
+  const weeks = data.weeks || [];
+  let dayOffset = 0;
+  if (weeks.length) {
+    weeks.forEach((week) => {
+      const span = week.days ? week.days.length : 0;
+      if (!span) return;
+      const weekCell = document.createElement("div");
+      weekCell.className = "cell-head week-head";
+      weekCell.style.gridColumn = `span ${span}`;
+      weekCell.textContent = formatValue(week.week_avg || 0);
+      if (dayOffset > 0 && week.days[0] && week.days[0].dow === 1) {
+        weekCell.classList.add("week-sep");
+      }
+      grid.appendChild(weekCell);
+      dayOffset += span;
+    });
+  } else {
+    const weekCell = document.createElement("div");
+    weekCell.className = "cell-head week-head";
+    weekCell.style.gridColumn = `span ${days.length}`;
+    grid.appendChild(weekCell);
+  }
+
   const corner = document.createElement("div");
-  corner.className = "cell-head row-head corner";
+  corner.className = "cell-head row-head corner day-head";
   corner.textContent = "Время";
   grid.appendChild(corner);
 
-  days.forEach((day) => {
+  days.forEach((day, idx) => {
     const head = document.createElement("div");
     head.className = "cell-head day-head";
     if (day.dow === 6 || day.dow === 7) {
       head.classList.add("weekend");
+    }
+    if (day.dow === 1 && idx > 0) {
+      head.classList.add("week-sep");
     }
     head.innerHTML = formatDayHeader(day.date);
     grid.appendChild(head);
@@ -164,18 +248,31 @@ function renderGroupMonth(group, data) {
   hours.forEach((hour, hourIdx) => {
     const rowHead = document.createElement("div");
     rowHead.className = "cell-head row-head";
+    if (hour === 9) {
+      rowHead.classList.add("hour-sep");
+    }
+    if (hour === 22) {
+      rowHead.classList.add("hour-sep-top");
+    }
     rowHead.textContent = `${hour}:00`;
     grid.appendChild(rowHead);
 
-    days.forEach((day) => {
+    days.forEach((day, dayIdx) => {
       const cellData = day.cells?.[hourIdx] || { load_pct: 0, busy_count: 0, staff_total: 0 };
       const cell = document.createElement("div");
       cell.className = "cell";
-      cell.style.background = colorFor(cellData.load_pct || 0);
-      const rounded = Math.round(cellData.load_pct || 0);
-      if (SHOW_EDGE_LABELS && (rounded === 10 || rounded === 90)) {
-        cell.textContent = `${rounded}%`;
+      if (day.dow === 1 && dayIdx > 0) {
+        cell.classList.add("week-sep");
       }
+      if (hour === 9) {
+        cell.classList.add("hour-sep");
+      }
+      if (hour === 22) {
+        cell.classList.add("hour-sep-top");
+      }
+      cell.dataset.pct = cellData.load_pct || 0;
+      cell.style.background = colorFor(cellData.load_pct || 0);
+      cell.textContent = formatValue(cellData.load_pct || 0);
       cell.title = `${day.date} ${hour}:00 • ${formatPct(cellData.load_pct || 0)} (${cellData.busy_count}/${cellData.staff_total})`;
       grid.appendChild(cell);
     });
@@ -186,25 +283,14 @@ function renderGroupMonth(group, data) {
   avgLabel.textContent = "Итог дня";
   grid.appendChild(avgLabel);
 
-  days.forEach((day) => {
+  days.forEach((day, dayIdx) => {
     const cell = document.createElement("div");
     cell.className = "cell-total";
-    cell.textContent = formatPct(day.day_avg || 0);
+    if (day.dow === 1 && dayIdx > 0) {
+      cell.classList.add("week-sep");
+    }
+    cell.textContent = formatValue(day.day_avg || 0);
     grid.appendChild(cell);
-  });
-
-  const grayLabel = document.createElement("div");
-  grayLabel.className = "cell-head row-head";
-  grayLabel.textContent = "Вне окна";
-  grid.appendChild(grayLabel);
-
-  days.forEach((day) => {
-    const gray = document.createElement("div");
-    gray.className = "cell-gray";
-    const early = day.gray?.early ? "●" : "—";
-    const late = day.gray?.late ? "●" : "—";
-    gray.innerHTML = `<span class="gray-dot-mini">${early}</span><span class="gray-dot-mini">${late}</span>`;
-    grid.appendChild(gray);
   });
 
   scroll.appendChild(grid);
@@ -276,11 +362,13 @@ async function refresh() {
       renderGroupError(group, err);
     }
   }
+  applyPalette(monthContainer, getPaletteName());
 }
 
 async function init() {
   buildMonths();
   await loadBranches();
+  initPaletteControls();
   await refresh();
 }
 

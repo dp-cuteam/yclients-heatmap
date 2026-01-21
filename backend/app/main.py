@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import authenticate, require_admin
 from .config import settings
-from .db import get_conn, init_db, init_historical_db
+from .db import get_conn, init_db, init_historical_db, db_source_label
 from .diagnostics import (
     run_diagnostics,
     _latest_log_info,
@@ -56,7 +56,10 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 def on_startup():
     init_db()
     init_historical_db()
-    start_scheduler()
+    if settings.enable_scheduler:
+        start_scheduler()
+    else:
+        logging.getLogger("scheduler").info("Scheduler disabled (ENABLE_SCHEDULER=0)")
 
 
 @app.on_event("shutdown")
@@ -269,11 +272,11 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
     if branch_start and branch_start > effective_start:
         effective_start = branch_start
     if effective_start > week_end:
-        return {"week_start": week_start_date.isoformat(), "hours": list(range(10, 22)), "days": []}
+        return {"week_start": week_start_date.isoformat(), "hours": list(range(8, 24)), "days": []}
     group = _get_group(branch_id, group_id)
     staff_ids = [int(x) for x in group.get("staff_ids", [])]
 
-    hours = list(range(10, 22))
+    hours = list(range(8, 24))
     days = []
 
     with get_conn() as conn:
@@ -281,35 +284,13 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
             """
             SELECT date, hour, load_pct, busy_count, staff_total
             FROM group_hour_load
-            WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
+            WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 8 AND 23
             """,
             (branch_id, group_id, effective_start.isoformat(), week_end.isoformat()),
         )
         rows = cur.fetchall()
         by_day_hour = {(r["date"], int(r["hour"])): r for r in rows}
 
-        gray = {}
-        if staff_ids:
-            placeholders = ",".join("?" for _ in staff_ids)
-            cur2 = conn.execute(
-                f"""
-                SELECT date, hour
-                FROM staff_hour_busy
-                WHERE branch_id = ? AND staff_id IN ({placeholders})
-                  AND date BETWEEN ? AND ?
-                  AND busy_flag = 1
-                  AND (hour < 10 OR hour >= 22)
-                """,
-                [branch_id, *staff_ids, effective_start.isoformat(), week_end.isoformat()],
-            )
-            for r in cur2.fetchall():
-                key = r["date"]
-                if key not in gray:
-                    gray[key] = {"early": False, "late": False}
-                if int(r["hour"]) < 10:
-                    gray[key]["early"] = True
-                else:
-                    gray[key]["late"] = True
 
     for day in daterange(effective_start, week_end):
         day_str = day.isoformat()
@@ -331,7 +312,6 @@ def api_heatmap(branch_id: int, group_id: str, week_start: str, request: Request
                 "date": day_str,
                 "dow": day.isoweekday(),
                 "cells": cells,
-                "gray": gray.get(day_str, {"early": False, "late": False}),
             }
         )
 
@@ -355,52 +335,32 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
     if branch_start and branch_start > effective_start:
         effective_start = branch_start
     if effective_start > last_day:
-        return {"month": month, "hours": list(range(10, 22)), "weeks": [], "month_avg": 0.0}
+        return {"month": month, "hours": list(range(8, 24)), "weeks": [], "month_avg": 0.0}
 
     group = _get_group(branch_id, group_id)
     staff_ids = [int(x) for x in group.get("staff_ids", [])]
-    hours = list(range(10, 22))
+    hours = list(range(8, 24))
+    bench_hours = {h for h in hours if 10 <= h <= 21}
 
     with get_conn() as conn:
         cur = conn.execute(
             """
             SELECT date, hour, load_pct, busy_count, staff_total
             FROM group_hour_load
-            WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
+            WHERE branch_id = ? AND group_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 8 AND 23
             """,
             (branch_id, group_id, effective_start.isoformat(), last_day.isoformat()),
         )
         rows = cur.fetchall()
         by_day_hour = {(r["date"], int(r["hour"])): r for r in rows}
 
-        gray = {}
-        if staff_ids:
-            placeholders = ",".join("?" for _ in staff_ids)
-            cur2 = conn.execute(
-                f"""
-                SELECT date, hour
-                FROM staff_hour_busy
-                WHERE branch_id = ? AND staff_id IN ({placeholders})
-                  AND date BETWEEN ? AND ?
-                  AND busy_flag = 1
-                  AND (hour < 10 OR hour >= 22)
-                """,
-                [branch_id, *staff_ids, effective_start.isoformat(), last_day.isoformat()],
-            )
-            for r in cur2.fetchall():
-                key = r["date"]
-                if key not in gray:
-                    gray[key] = {"early": False, "late": False}
-                if int(r["hour"]) < 10:
-                    gray[key]["early"] = True
-                else:
-                    gray[key]["late"] = True
 
     days_map = {}
     all_vals = []
     for day in daterange(effective_start, last_day):
         day_str = day.isoformat()
         cells = []
+        bench_vals = []
         for hour in hours:
             row = by_day_hour.get((day_str, hour))
             if row:
@@ -414,15 +374,15 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
                 )
             else:
                 cells.append({"load_pct": 0.0, "busy_count": 0, "staff_total": len(staff_ids)})
-        day_vals = [c["load_pct"] for c in cells]
-        all_vals.extend(day_vals)
-        day_avg = round(sum(day_vals) / len(day_vals), 2) if day_vals else 0.0
+            if hour in bench_hours:
+                bench_vals.append(cells[-1]["load_pct"])
+        all_vals.extend(bench_vals)
+        day_avg = round(sum(bench_vals) / len(bench_vals), 2) if bench_vals else 0.0
         days_map[day_str] = {
             "date": day_str,
             "dow": day.isoweekday(),
             "cells": cells,
             "day_avg": day_avg,
-            "gray": gray.get(day_str, {"early": False, "late": False}),
         }
 
     # build week blocks (Monday-Sunday), include only days within month
@@ -438,7 +398,9 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
             day_str = day.isoformat()
             day_obj = days_map[day_str]
             week_days.append(day_obj)
-            week_vals.extend([c["load_pct"] for c in day_obj["cells"]])
+            for idx, hour in enumerate(hours):
+                if hour in bench_hours:
+                    week_vals.append(day_obj["cells"][idx]["load_pct"])
         week_avg = round(sum(week_vals) / len(week_vals), 2) if week_vals else 0.0
         weeks.append(
             {
@@ -470,13 +432,15 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
     branch_start = _branch_start_date(branch_id)
     if branch_start and branch_start > effective_start:
         effective_start = branch_start
-    db_exists = settings.db_path.exists()
+    source_label = db_source_label()
+    db_exists = True if source_label == "Postgres" else settings.db_path.exists()
+    db_path = "DATABASE_URL" if source_label == "Postgres" else str(settings.db_path)
     if effective_start > last_day:
         return {
             "branch_id": branch_id,
             "month": month,
-            "source": "SQLite",
-            "db_path": str(settings.db_path),
+            "source": source_label,
+            "db_path": db_path,
             "db_exists": db_exists,
             "last_updated": None,
             "total_rows": 0,
@@ -492,7 +456,7 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
             """
             SELECT group_id, COUNT(*) as cnt
             FROM group_hour_load
-            WHERE branch_id = ? AND date BETWEEN ? AND ?
+            WHERE branch_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 8 AND 23
             GROUP BY group_id
             """,
             (branch_id, effective_start.isoformat(), last_day.isoformat()),
@@ -517,7 +481,7 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
             "No heatmap data: branch=%s month=%s db=%s",
             branch_id,
             month,
-            settings.db_path,
+            source_label,
         )
 
     group_counts = []
@@ -530,15 +494,15 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
                 branch_id,
                 gid,
                 month,
-                settings.db_path,
+                source_label,
             )
         group_counts.append({"group_id": gid, "name": g.get("name"), "count": cnt})
 
     return {
         "branch_id": branch_id,
         "month": month,
-        "source": "SQLite",
-        "db_path": str(settings.db_path),
+        "source": source_label,
+        "db_path": db_path,
         "db_exists": db_exists,
         "last_updated": last_updated,
         "total_rows": total_rows,

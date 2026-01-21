@@ -358,7 +358,11 @@ def list_months(branch_id: int) -> list[str]:
         return [r[0] for r in cur.fetchall()]
 
 
-def _build_weeks(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_weeks(
+    days: list[dict[str, Any]],
+    hours: list[int],
+    bench_hours: set[int],
+) -> list[dict[str, Any]]:
     if not days:
         return []
     first_day = date.fromisoformat(days[0]["date"])
@@ -374,7 +378,9 @@ def _build_weeks(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if day_date < current or day_date > week_end:
                 continue
             week_days.append(day)
-            week_vals.extend([c["load_pct"] for c in day["cells"]])
+            for idx, hour in enumerate(hours):
+                if hour in bench_hours:
+                    week_vals.append(day["cells"][idx]["load_pct"])
         week_avg = round(sum(week_vals) / len(week_vals), 2) if week_vals else 0.0
         weeks.append(
             {
@@ -412,7 +418,8 @@ def month_payload(branch_id: int, month: str) -> dict[str, Any]:
         )
         type_order = [r[0] for r in cur2.fetchall()]
 
-    hours = sorted({int(r["hour"]) for r in rows})
+    hours = sorted(h for h in {int(r["hour"]) for r in rows} if 8 <= h <= 23)
+    bench_hours = {h for h in hours if 10 <= h <= 21}
     dates = sorted({r["date"] for r in rows})
     hour_index = {hour: idx for idx, hour in enumerate(hours)}
     date_index = {day: idx for idx, day in enumerate(dates)}
@@ -447,19 +454,16 @@ def month_payload(branch_id: int, month: str) -> dict[str, Any]:
         days = types_map.get(type_name) or []
         all_vals = []
         for day in days:
-            vals = [c["load_pct"] for c in day["cells"]]
-            all_vals.extend(vals)
-            day_avg = round(sum(vals) / len(vals), 2) if vals else 0.0
-            early = any(
-                day["cells"][i]["load_pct"] > 0 for i, h in enumerate(hours) if h < 10
-            )
-            late = any(
-                day["cells"][i]["load_pct"] > 0 for i, h in enumerate(hours) if h >= 22
-            )
+            bench_vals = [
+                day["cells"][i]["load_pct"]
+                for i, h in enumerate(hours)
+                if h in bench_hours
+            ]
+            all_vals.extend(bench_vals)
+            day_avg = round(sum(bench_vals) / len(bench_vals), 2) if bench_vals else 0.0
             day["day_avg"] = day_avg
-            day["gray"] = {"early": early, "late": late}
         month_avg = round(sum(all_vals) / len(all_vals), 2) if all_vals else 0.0
-        weeks = _build_weeks(days)
+        weeks = _build_weeks(days, hours, bench_hours)
         types_out.append(
             {
                 "name": type_name,

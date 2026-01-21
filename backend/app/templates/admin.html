@@ -27,6 +27,19 @@
       </header>
 
       <section class="admin-panel">
+        <div class="admin-visual">
+          <div class="status-label">Палитра теплокарты</div>
+          <div class="palette-switch">
+            <label>
+              <input type="radio" name="heatmapPalette" value="perceptual" />
+              Perceptual (ColorBrewer)
+            </label>
+            <label>
+              <input type="radio" name="heatmapPalette" value="bgyor" />
+              Сине‑зелёный‑жёлтый‑красный
+            </label>
+          </div>
+        </div>
         <div class="admin-actions">
           <button id="startFull" class="primary">Полная загрузка за 2025</button>
           <button id="recalc" class="ghost" disabled>Пересчитать агрегаты</button>

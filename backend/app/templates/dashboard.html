@@ -44,6 +44,16 @@
             <div class="legend-bar"></div>
             <span>100%</span>
           </div>
+          <div class="palette-switch">
+            <label>
+              <input type="radio" name="heatmapPalette" value="perceptual" />
+              Perceptual
+            </label>
+            <label>
+              <input type="radio" name="heatmapPalette" value="bgyor" />
+              Сине‑зелёный‑жёлтый‑красный
+            </label>
+          </div>
         </div>
         <div class="data-status">
           <div class="status-lines">
@@ -55,7 +65,7 @@
           </div>
           <button id="dataRefresh" class="ghost">Обновить</button>
         </div>
-        <p class="subtitle">Серая зона: слева точка — до 10:00, справа — после 22:00.</p>
+        <p class="subtitle">Разделители: после 9:00 и перед 22:00. Недели разделяются по понедельнику.</p>
         <div id="monthContainer" class="month-container"></div>
       </section>
     </div>

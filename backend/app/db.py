@@ -1,13 +1,80 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterable
 
 from .config import settings
 
+DB_URL = os.getenv("DATABASE_URL", "").strip()
+USE_POSTGRES = DB_URL.startswith("postgres")
 
-def _connect(db_path: Path) -> sqlite3.Connection:
+try:
+    if USE_POSTGRES:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    else:
+        psycopg2 = None
+        RealDictCursor = None
+except Exception:  # noqa: BLE001
+    psycopg2 = None
+    RealDictCursor = None
+
+
+class DBConn:
+    def __init__(self, conn, kind: str):
+        self._conn = conn
+        self._kind = kind
+
+    def _prepare(self, sql: str) -> str:
+        if self._kind == "postgres":
+            return sql.replace("?", "%s")
+        return sql
+
+    def execute(self, sql: str, params: Iterable | None = None):
+        params = [] if params is None else params
+        sql = self._prepare(sql)
+        if self._kind == "postgres":
+            cur = self._conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(sql, params)
+            return cur
+        return self._conn.execute(sql, params)
+
+    def executemany(self, sql: str, seq: Iterable[Iterable]):
+        sql = self._prepare(sql)
+        if self._kind == "postgres":
+            cur = self._conn.cursor()
+            cur.executemany(sql, seq)
+            return cur
+        return self._conn.executemany(sql, seq)
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+
+def db_source_label() -> str:
+    return "Postgres" if USE_POSTGRES else "SQLite"
+
+
+def upsert_sql(table: str, columns: list[str], conflict_cols: list[str]) -> str:
+    cols = ", ".join(columns)
+    placeholders = ", ".join("?" for _ in columns)
+    if not USE_POSTGRES:
+        return f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({placeholders})"
+    conflict = ", ".join(conflict_cols)
+    update_cols = [c for c in columns if c not in conflict_cols]
+    if update_cols:
+        updates = ", ".join(f"{c}=EXCLUDED.{c}" for c in update_cols)
+        return f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT ({conflict}) DO UPDATE SET {updates}"
+    return f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT ({conflict}) DO NOTHING"
+
+
+def _connect_sqlite(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -16,9 +83,18 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _connect_postgres():
+    if not psycopg2:
+        raise RuntimeError("psycopg2 is required for Postgres connection")
+    conn = psycopg2.connect(DB_URL)
+    conn.autocommit = False
+    return conn
+
+
 @contextmanager
-def get_conn() -> sqlite3.Connection:
-    conn = _connect(settings.db_path)
+def get_conn() -> DBConn:
+    raw = _connect_postgres() if USE_POSTGRES else _connect_sqlite(settings.db_path)
+    conn = DBConn(raw, "postgres" if USE_POSTGRES else "sqlite")
     try:
         yield conn
     finally:
@@ -26,8 +102,9 @@ def get_conn() -> sqlite3.Connection:
 
 
 @contextmanager
-def get_hist_conn() -> sqlite3.Connection:
-    conn = _connect(settings.historical_db_path)
+def get_hist_conn() -> DBConn:
+    raw = _connect_sqlite(settings.historical_db_path)
+    conn = DBConn(raw, "sqlite")
     try:
         yield conn
     finally:

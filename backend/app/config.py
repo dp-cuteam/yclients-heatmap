@@ -44,6 +44,17 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    value = value.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
@@ -65,6 +76,7 @@ class Settings:
     branch_start_date: date | None
     historical_excel_path: Path
     historical_db_path: Path
+    enable_scheduler: bool
 
 
 def load_settings() -> Settings:
@@ -108,6 +120,7 @@ def load_settings() -> Settings:
     historical_db_path = Path(
         os.getenv("HISTORICAL_DB_PATH", data_dir / "historical.db")
     )
+    enable_scheduler = _parse_bool(os.getenv("ENABLE_SCHEDULER"), default=False)
 
     return Settings(
         data_dir=data_dir,
@@ -129,6 +142,7 @@ def load_settings() -> Settings:
         branch_start_date=branch_start_date,
         historical_excel_path=historical_excel_path,
         historical_db_path=historical_db_path,
+        enable_scheduler=enable_scheduler,
     )
 
 

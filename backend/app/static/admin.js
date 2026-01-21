@@ -11,6 +11,7 @@ const histImportBtn = document.getElementById("histImport");
 const histReimportBtn = document.getElementById("histReimport");
 const histListFilesBtn = document.getElementById("histListFiles");
 const histFiles = document.getElementById("histFiles");
+const paletteInputs = document.querySelectorAll('input[name="heatmapPalette"]');
 
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options);
@@ -139,3 +140,18 @@ setInterval(refreshStatus, 5000);
 refreshStatus().catch((err) => console.error(err));
 refreshHistoricalStatus().catch((err) => console.error(err));
 setInterval(refreshHistoricalStatus, 10000);
+
+function loadPaletteSetting() {
+  const current = localStorage.getItem("heatmapPalette") || "perceptual";
+  paletteInputs.forEach((input) => {
+    input.checked = input.value === current;
+  });
+}
+
+paletteInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    localStorage.setItem("heatmapPalette", input.value);
+  });
+});
+
+loadPaletteSetting();

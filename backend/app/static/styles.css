@@ -13,7 +13,7 @@
   --radius-lg: 20px;
   --radius-md: 12px;
   --grid-gap: 8px;
-  --heatmap-cell: 22px;
+  --heatmap-cell: 26px;
   --heatmap-gap: 1px;
   --heatmap-radius: 2px;
 }
@@ -145,6 +145,7 @@ input {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .legend {
@@ -160,6 +161,30 @@ input {
   height: 10px;
   border-radius: 999px;
   background: linear-gradient(90deg, #fff5f5, #d90429);
+}
+
+.palette-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.palette-switch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-visual {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--shell);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
 }
 
 .month-container {
@@ -207,12 +232,12 @@ input {
 .month-grid-wide {
   display: grid;
   gap: var(--heatmap-gap);
-  min-width: 860px;
+  min-width: 920px;
   grid-auto-rows: var(--heatmap-cell);
 }
 
 .month-grid-wide .cell {
-  font-size: 0;
+  font-size: 11px;
 }
 
 .row-head {
@@ -230,7 +255,7 @@ input {
   line-height: 1.2;
   text-align: center;
   position: sticky;
-  top: 0;
+  top: var(--heatmap-cell);
   background: #fff;
   z-index: 2;
   height: 32px;
@@ -238,6 +263,28 @@ input {
 
 .day-head.weekend {
   color: var(--accent-dark);
+}
+
+.week-head {
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 4;
+}
+
+.week-sep {
+  border-left: 1px solid #d5ccc0;
+}
+
+.hour-sep {
+  border-bottom: 1px solid #d5ccc0;
+}
+
+.hour-sep-top {
+  border-top: 1px solid #d5ccc0;
 }
 
 .week-block {
@@ -284,10 +331,13 @@ input {
 }
 
 .cell {
-  color: transparent;
+  color: #2c1d1d;
   font-weight: 600;
   position: relative;
   transition: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cell:hover {
@@ -300,6 +350,9 @@ input {
   font-weight: 600;
   font-size: 10px;
   color: #3b3b3b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cell-gray {

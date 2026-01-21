@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from typing import Iterable
 
 from .config import settings
-from .db import get_conn
+from .db import get_conn, upsert_sql
 from .groups import load_group_config, resolve_staff_ids, save_group_config
 from .utils import parse_datetime, daterange
 from .yclients import YClientsClient
@@ -64,15 +64,13 @@ def _iter_hours(start_dt: datetime, end_dt: datetime) -> Iterable[datetime]:
 
 
 def _upsert_raw_records(records: list[dict]) -> None:
+    sql = upsert_sql(
+        "raw_records",
+        ["branch_id", "staff_id", "record_id", "start_dt", "end_dt", "attendance", "updated_at"],
+        ["branch_id", "record_id"],
+    )
     with get_conn() as conn:
-        conn.executemany(
-            """
-            INSERT OR REPLACE INTO raw_records
-            (branch_id, staff_id, record_id, start_dt, end_dt, attendance, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            records,
-        )
+        conn.executemany(sql, records)
         conn.commit()
 
 
@@ -96,14 +94,12 @@ def _rebuild_staff_hour_busy(branch_id: int, date_from: date, date_to: date, rec
             (branch_id, date_from.isoformat(), date_to.isoformat()),
         )
         if rows:
-            conn.executemany(
-                """
-                INSERT OR REPLACE INTO staff_hour_busy
-                (branch_id, staff_id, date, hour, busy_flag, in_benchmark, in_gray)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                rows.values(),
+            sql = upsert_sql(
+                "staff_hour_busy",
+                ["branch_id", "staff_id", "date", "hour", "busy_flag", "in_benchmark", "in_gray"],
+                ["branch_id", "staff_id", "date", "hour"],
             )
+            conn.executemany(sql, rows.values())
         conn.commit()
 
 
@@ -165,14 +161,22 @@ def _rebuild_group_hour_load(branch_id: int, group_config: dict, date_from: date
                         )
                     )
         if insert_rows:
-            conn.executemany(
-                """
-                INSERT OR REPLACE INTO group_hour_load
-                (branch_id, group_id, date, dow, hour, busy_count, staff_total, load_pct, in_benchmark)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                insert_rows,
+            sql = upsert_sql(
+                "group_hour_load",
+                [
+                    "branch_id",
+                    "group_id",
+                    "date",
+                    "dow",
+                    "hour",
+                    "busy_count",
+                    "staff_total",
+                    "load_pct",
+                    "in_benchmark",
+                ],
+                ["branch_id", "group_id", "date", "hour"],
             )
+            conn.executemany(sql, insert_rows)
         conn.commit()
 
 
