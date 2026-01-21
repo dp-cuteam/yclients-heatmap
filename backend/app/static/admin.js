@@ -1,4 +1,5 @@
 const startBtn = document.getElementById("startFull");
+const dailyBtn = document.getElementById("startDaily");
 const statusEl = document.getElementById("etlStatus");
 const progressEl = document.getElementById("etlProgress");
 const timeEl = document.getElementById("etlTime");
@@ -126,15 +127,33 @@ if (histListFilesBtn) {
 
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
+  if (dailyBtn) dailyBtn.disabled = true;
   try {
     await fetchJSON("/api/admin/etl/full_2025/start", { method: "POST" });
   } catch (err) {
     console.error(err);
   } finally {
     startBtn.disabled = false;
+    if (dailyBtn) dailyBtn.disabled = false;
     await refreshStatus();
   }
 });
+
+if (dailyBtn) {
+  dailyBtn.addEventListener("click", async () => {
+    dailyBtn.disabled = true;
+    startBtn.disabled = true;
+    try {
+      await fetchJSON("/api/admin/etl/daily/start", { method: "POST" });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      dailyBtn.disabled = false;
+      startBtn.disabled = false;
+      await refreshStatus();
+    }
+  });
+}
 
 setInterval(refreshStatus, 5000);
 refreshStatus().catch((err) => console.error(err));

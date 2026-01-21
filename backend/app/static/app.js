@@ -97,34 +97,57 @@ function initPaletteControls() {
   updateLegend(current);
 }
 
-function buildMonths() {
-  const names = [
-    "Январь",
-    "Февраль",
-    "Март",
-    "Апрель",
-    "Май",
-    "Июнь",
-    "Июль",
-    "Август",
-    "Сентябрь",
-    "Октябрь",
-    "Ноябрь",
-    "Декабрь",
-  ];
+function buildMonthsLocal() {
   monthSelect.innerHTML = "";
   const startValue = window.BRANCH_START_DATE || "2025-01-01";
   const startDate = new Date(startValue);
-  const startMonth = Number.isNaN(startDate.getTime()) ? 1 : startDate.getMonth() + 1;
-  for (let idx = startMonth; idx <= 12; idx += 1) {
-    const name = names[idx - 1];
-    const value = `2025-${String(idx).padStart(2, "0")}`;
-    const opt = document.createElement("option");
-    opt.value = value;
-    opt.textContent = `${name} 2025`;
-    monthSelect.appendChild(opt);
+  const start = Number.isNaN(startDate.getTime()) ? new Date(2025, 0, 1) : new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth(), 1);
+  const months = [];
+  const cursor = new Date(start.getTime());
+  while (cursor <= end) {
+    const value = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    let label = cursor.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+    label = label.charAt(0).toUpperCase() + label.slice(1);
+    months.push({ value, label });
+    cursor.setMonth(cursor.getMonth() + 1);
   }
-  monthSelect.value = `2025-${String(startMonth).padStart(2, "0")}`;
+  months.sort((a, b) => b.value.localeCompare(a.value));
+  months.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.value;
+    opt.textContent = m.label;
+    monthSelect.appendChild(opt);
+  });
+  if (months.length) {
+    monthSelect.value = months[0].value;
+  }
+}
+
+async function loadMonths() {
+  monthSelect.innerHTML = "";
+  try {
+    const data = await fetchJSON("/api/months");
+    const months = (data.months || []).slice().sort((a, b) => b.localeCompare(a));
+    months.forEach((value) => {
+      const [year, month] = value.split("-").map((part) => Number(part));
+      const date = new Date(year, Math.max(0, month - 1), 1);
+      let label = date.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+      label = label.charAt(0).toUpperCase() + label.slice(1);
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      monthSelect.appendChild(opt);
+    });
+    if (months.length) {
+      monthSelect.value = months[0];
+      return;
+    }
+  } catch (err) {
+    console.warn("Failed to load months from API, using local fallback.", err);
+  }
+  buildMonthsLocal();
 }
 
 async function fetchJSON(url) {
@@ -366,7 +389,7 @@ async function refresh() {
 }
 
 async function init() {
-  buildMonths();
+  await loadMonths();
   await loadBranches();
   initPaletteControls();
   await refresh();

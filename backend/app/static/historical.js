@@ -247,7 +247,11 @@ async function loadBranches() {
   data.branches.forEach((b) => {
     const opt = document.createElement("option");
     opt.value = b.branch_id;
-    opt.textContent = b.code ? `${b.code} (${b.branch_id})` : b.branch_id;
+    let label = b.display_name || (b.code ? `${b.code} (${b.branch_id})` : b.branch_id);
+    if (b.display_name && String(b.display_name) !== String(b.branch_id)) {
+      label = `${b.display_name} (${b.branch_id})`;
+    }
+    opt.textContent = label;
     branchSelect.appendChild(opt);
   });
   if (data.branches.length) {
@@ -261,16 +265,17 @@ async function loadBranches() {
 async function loadMonths(branchId) {
   const data = await fetchJSON(`/api/historical/branches/${branchId}/months`);
   monthSelect.innerHTML = "";
-  data.months.forEach((m) => {
+  const months = (data.months || []).slice().sort((a, b) => b.localeCompare(a));
+  months.forEach((m) => {
     const opt = document.createElement("option");
     opt.value = m;
     opt.textContent = m;
     monthSelect.appendChild(opt);
   });
-  if (data.months.length) {
-    monthSelect.value = data.months[data.months.length - 1];
+  if (months.length) {
+    monthSelect.value = months[0];
   }
-  if (!data.months.length) {
+  if (!months.length) {
     container.innerHTML = '<div class="group-empty">Нет данных за выбранный филиал.</div>';
   }
 }

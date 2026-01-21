@@ -10,7 +10,7 @@ from typing import Any, Iterable
 
 from .config import BASE_DIR, settings
 from .db import get_hist_conn, init_historical_db
-from .utils import week_start_monday
+from .utils import week_start_monday, resource_sort_key
 
 
 log = logging.getLogger("historical")
@@ -352,7 +352,7 @@ def list_branches() -> list[dict[str, Any]]:
 def list_months(branch_id: int) -> list[str]:
     with get_hist_conn() as conn:
         cur = conn.execute(
-            "SELECT DISTINCT month FROM historical_loads WHERE branch_id = ? ORDER BY month",
+            "SELECT DISTINCT month FROM historical_loads WHERE branch_id = ? ORDER BY month DESC",
             (branch_id,),
         )
         return [r[0] for r in cur.fetchall()]
@@ -449,8 +449,11 @@ def month_payload(branch_id: int, month: str) -> dict[str, Any]:
             continue
         types_map[type_name][day_idx]["cells"][hour_idx]["load_pct"] = float(r["load_pct"])
 
+    names = type_order or sorted(types_map.keys())
+    order_index = {name: idx for idx, name in enumerate(names)}
+    names = sorted(names, key=lambda name: resource_sort_key(name, order_index.get(name, 0)))
     types_out = []
-    for type_name in type_order or sorted(types_map.keys()):
+    for type_name in names:
         days = types_map.get(type_name) or []
         all_vals = []
         for day in days:

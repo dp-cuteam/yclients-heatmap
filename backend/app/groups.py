@@ -6,7 +6,10 @@ from copy import deepcopy
 from pathlib import Path
 
 from .config import settings
-from .yclients import YClientsClient
+from .yclients import YClientsClient, build_client
+
+
+_branch_names_checked = False
 
 
 def _load_json(path: Path) -> dict:
@@ -27,6 +30,53 @@ def load_group_config() -> dict:
             b for b in data.get("branches", []) if int(b.get("branch_id", 0)) in allowed
         ]
     return data
+
+
+def _needs_display_name(branch: dict) -> bool:
+    branch_id = branch.get("branch_id")
+    display_name = (branch.get("display_name") or "").strip()
+    return not display_name or display_name == str(branch_id)
+
+
+def ensure_branch_names(config: dict) -> dict:
+    global _branch_names_checked
+    if _branch_names_checked:
+        return config
+    _branch_names_checked = True
+    branches = config.get("branches") or []
+    targets = [b for b in branches if _needs_display_name(b)]
+    if not targets:
+        return config
+    log = logging.getLogger("groups")
+    try:
+        client = build_client()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Failed to init YCLIENTS client for branch names: %s", exc)
+        return config
+    try:
+        companies_resp = client.get_companies()
+        company_names = {}
+        for company in companies_resp.get("data") or []:
+            cid = company.get("id")
+            title = (company.get("title") or "").strip()
+            if cid is not None and title:
+                company_names[int(cid)] = title
+        updated = False
+        for branch in targets:
+            branch_id = branch.get("branch_id")
+            try:
+                branch_id_int = int(branch_id)
+            except Exception:
+                continue
+            title = company_names.get(branch_id_int)
+            if title:
+                branch["display_name"] = title
+                updated = True
+        if updated:
+            save_group_config(config)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Failed to resolve branch display names: %s", exc)
+    return config
 
 
 def save_group_config(config: dict) -> None:

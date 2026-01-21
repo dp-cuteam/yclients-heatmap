@@ -17,9 +17,6 @@
         <div class="actions">
           <a class="ghost" href="/">К теплокарте</a>
           <a class="ghost" href="/historical">Исторические данные</a>
-          <a class="ghost" href="/staff-types">Сотрудники</a>
-          <a class="ghost" href="/admin/staff-slots">Проверка филиала</a>
-          <a class="ghost" href="/admin/diagnostics">Диагностика</a>
           <form method="post" action="/logout">
             <button class="ghost" type="submit">Выйти</button>
           </form>
@@ -41,8 +38,13 @@
           </div>
         </div>
         <div class="admin-actions">
-          <button id="startFull" class="primary">Полная загрузка за 2025</button>
-          <button id="recalc" class="ghost" disabled>Пересчитать агрегаты</button>
+          <button id="startFull" class="primary">Полная загрузка (с 2025 по сегодня)</button>
+          <button id="startDaily" class="ghost">Дневная загрузка (вчера)</button>
+        </div>
+        <div class="status-meta">
+          Данные сохраняются в базе и подхватываются после перезапуска. Дневная загрузка
+          добавляет новые записи за вчера, полная — пересчитывает период с 2025-01-01 по
+          текущую дату.
         </div>
         <div class="admin-status">
           <div class="status-card">
@@ -83,9 +85,103 @@
           </div>
           <pre id="histFiles" class="status-log"></pre>
         </div>
+
+        <div class="admin-divider"></div>
+
+        <section class="diag-grid">
+          <div class="diag-card">
+            <h2>Диагностика YCLIENTS</h2>
+            <div class="diag-row">
+              <span>Партнёрский токен</span>
+              <span id="cfgPartner">—</span>
+            </div>
+            <div class="diag-row">
+              <span>Пользовательский токен</span>
+              <span id="cfgUser">—</span>
+            </div>
+            <div class="diag-row">
+              <span>Часовой пояс</span>
+              <span id="cfgTz">—</span>
+            </div>
+            <div class="diag-row">
+              <span>Среда</span>
+              <span id="cfgEnv">—</span>
+            </div>
+            <div class="diag-row">
+              <span>Последняя попытка</span>
+              <span id="cfgLast">—</span>
+            </div>
+            <button id="runDiag" class="primary">Запустить проверку</button>
+          </div>
+
+          <div class="diag-card">
+            <h2>Параметры запросов</h2>
+            <div class="field">
+              <label>Филиал для проверки сотрудников</label>
+              <select id="diagBranch"></select>
+            </div>
+            <div class="field">
+              <label>Дата для проверки записей</label>
+              <input type="date" id="diagDate" />
+            </div>
+            <div class="field">
+              <label>staff_id (необязательно)</label>
+              <input type="number" id="diagStaff" placeholder="например 12345" />
+            </div>
+          </div>
+        </section>
+
+        <section class="diag-results">
+          <h2>Результаты тестов</h2>
+          <table class="diag-table">
+            <thead>
+              <tr>
+                <th>Проверка</th>
+                <th>Статус</th>
+                <th>HTTP</th>
+                <th>Время (мс)</th>
+                <th>Сообщение</th>
+                <th>Детали</th>
+              </tr>
+            </thead>
+            <tbody id="diagTableBody"></tbody>
+          </table>
+        </section>
+
+        <section class="diag-logs">
+          <h2>Логи</h2>
+          <div class="diag-row">
+            <span>Файл</span>
+            <span id="logPath">—</span>
+          </div>
+          <div class="diag-row">
+            <span>Размер</span>
+            <span id="logSize">—</span>
+          </div>
+          <div class="diag-actions">
+            <button id="logTail" class="ghost">Показать последние 200 строк</button>
+            <a id="logDownload" class="ghost" href="/api/admin/diagnostics/log/download">Скачать лог</a>
+          </div>
+          <pre id="logOutput" class="status-log"></pre>
+        </section>
+
+        <section class="diag-logs">
+          <h2>Support packet</h2>
+          <div class="diag-row">
+            <span>Status</span>
+            <span id="supportPacketStatus">?</span>
+          </div>
+          <div class="diag-actions">
+            <button id="supportPacketRun" class="primary">Generate support packet</button>
+            <a id="supportPacketDownload" class="ghost" href="/api/admin/diagnostics/support-packet/download">Download MD</a>
+            <a id="supportPacketDownloadJson" class="ghost" href="/api/admin/diagnostics/support-packet/download?format=json">Download JSON</a>
+          </div>
+          <pre id="supportPacketOutput" class="status-log"></pre>
+        </section>
       </section>
     </div>
 
     <script src="/static/admin.js"></script>
+    <script src="/static/diagnostics.js" type="module"></script>
   </body>
 </html>

@@ -273,7 +273,10 @@ def run_full_2025(client: YClientsClient) -> str:
             ):
                 if settings.branch_start_date > start_date:
                     start_date = settings.branch_start_date
-            end_date = date(2025, 12, 31)
+            tz = ZoneInfo(settings.timezone)
+            end_date = datetime.now(tz=tz).date()
+            if end_date < start_date:
+                end_date = start_date
 
             def progress_cb(bid, page, total):
                 if total:
