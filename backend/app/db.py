@@ -13,14 +13,26 @@ USE_POSTGRES = DB_URL.startswith("postgres")
 
 try:
     if USE_POSTGRES:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+            PG_DRIVER = 'psycopg'
+        except Exception:  # noqa: BLE001
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            PG_DRIVER = 'psycopg2'
     else:
+        psycopg = None
         psycopg2 = None
+        dict_row = None
         RealDictCursor = None
+        PG_DRIVER = None
 except Exception:  # noqa: BLE001
+    psycopg = None
     psycopg2 = None
+    dict_row = None
     RealDictCursor = None
+    PG_DRIVER = None
 
 
 class DBConn:
@@ -37,7 +49,10 @@ class DBConn:
         params = [] if params is None else params
         sql = self._prepare(sql)
         if self._kind == "postgres":
-            cur = self._conn.cursor(cursor_factory=RealDictCursor)
+            if PG_DRIVER == "psycopg2":
+                cur = self._conn.cursor(cursor_factory=RealDictCursor)
+            else:
+                cur = self._conn.cursor()
             cur.execute(sql, params)
             return cur
         return self._conn.execute(sql, params)
@@ -84,11 +99,13 @@ def _connect_sqlite(db_path: Path) -> sqlite3.Connection:
 
 
 def _connect_postgres():
-    if not psycopg2:
-        raise RuntimeError("psycopg2 is required for Postgres connection")
-    conn = psycopg2.connect(DB_URL)
-    conn.autocommit = False
-    return conn
+    if PG_DRIVER == "psycopg" and psycopg:
+        return psycopg.connect(DB_URL, row_factory=dict_row)
+    if PG_DRIVER == "psycopg2" and psycopg2:
+        conn = psycopg2.connect(DB_URL)
+        conn.autocommit = False
+        return conn
+    raise RuntimeError("Postgres driver not available (psycopg/psycopg2)")
 
 
 @contextmanager
