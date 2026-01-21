@@ -69,13 +69,13 @@ async function refreshHistoricalStatus() {
     histImportStatus.textContent = statusMap[imp.status] || imp.status || "—";
     const parts = [];
     if (imp.finished_at || imp.started_at) {
-      parts.push(`время: ${imp.finished_at || imp.started_at}`);
+      parts.push("время: " + (imp.finished_at || imp.started_at));
     }
     if (imp.rows_count !== null && imp.rows_count !== undefined) {
-      parts.push(`строк: ${imp.rows_count}`);
+      parts.push("строк: " + imp.rows_count);
     }
     if (imp.error_log) {
-      parts.push(`ошибка: ${imp.error_log.trim().split(\"\\n\").pop()}`);
+      parts.push("ошибка: " + String(imp.error_log).trim().split("\n").pop());
     }
     histImportMeta.textContent = parts.join(" · ");
   } catch (err) {
