@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Any
@@ -77,7 +78,12 @@ def _headers() -> dict[str, str]:
     }
 
 
-def _request(method: str, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+def _request(
+    method: str,
+    path: str,
+    params: dict[str, Any] | None = None,
+    timeout: int | None = None,
+) -> dict[str, Any]:
     url = f"{settings.yclients_base_url}{path}"
     start = time.perf_counter()
     status_code = None
@@ -90,7 +96,7 @@ def _request(method: str, path: str, params: dict[str, Any] | None = None) -> di
             url,
             headers=_headers(),
             params=params,
-            timeout=settings.yclients_timeout,
+            timeout=timeout or settings.yclients_timeout,
         )
         status_code = resp.status_code
         response_text = resp.text or ""
@@ -356,3 +362,254 @@ def run_diagnostics(branch_id: int | None = None, day: str | None = None, staff_
 
     log_info = _latest_log_info()
     return {"config": config_status, "tests": tests, "log": log_info, "branches": branch_list}
+
+
+def _mask_token_ascii(token: str | None) -> str:
+    if not token:
+        return "missing"
+    token = token.strip()
+    if len(token) <= 8:
+        return "****"
+    return f"{token[:4]}...{token[-4:]}"
+
+
+def _masked_headers_for_report() -> dict[str, str]:
+    partner = _mask_token_ascii(settings.yclients_partner_token)
+    user = _mask_token_ascii(settings.yclients_user_token) if settings.yclients_user_token else "missing"
+    auth = ""
+    if partner != "missing":
+        auth = f"Bearer {partner}"
+    if user != "missing":
+        auth = f"{auth}, User {user}".strip(", ")
+    return {
+        "Accept": "application/vnd.yclients.v2+json",
+        "Content-Type": "application/json",
+        "Authorization": auth or "missing",
+    }
+
+
+def _support_packet_paths() -> tuple[Path, Path]:
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    md_path = settings.data_dir / "SUPPORT_PACKET.md"
+    json_path = settings.data_dir / "support_packet_latest.json"
+    return md_path, json_path
+
+
+def latest_support_packet_info() -> dict[str, Any]:
+    md_path, json_path = _support_packet_paths()
+    return {
+        "md_path": str(md_path),
+        "json_path": str(json_path),
+        "md_exists": md_path.exists(),
+        "json_exists": json_path.exists(),
+    }
+
+
+def _load_branch_ids() -> list[int]:
+    branch_ids: list[int] = []
+    try:
+        raw = settings.group_config_path.read_text(encoding="utf-8-sig")
+        data = json.loads(raw)
+        for item in data.get("branches", []):
+            try:
+                branch_ids.append(int(item.get("branch_id")))
+            except Exception:
+                continue
+    except Exception:
+        branch_ids = []
+    if not branch_ids and settings.active_branch_ids:
+        branch_ids = list(settings.active_branch_ids)
+    return sorted(set(branch_ids))
+
+
+def _response_excerpt(text: str, limit: int = 20000) -> tuple[str, bool]:
+    if not text:
+        return "", False
+    if len(text) <= limit:
+        return text, False
+    return text[:limit] + "\n...[truncated]", True
+
+
+def _request_report(
+    name: str,
+    method: str,
+    path: str,
+    params: dict[str, Any] | None = None,
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    resp = _request(method, path, params=params, timeout=timeout)
+    response_text, truncated = _response_excerpt(resp["text"] or "")
+    return {
+        "name": name,
+        "method": method,
+        "url": f"{settings.yclients_base_url}{path}",
+        "headers": _masked_headers_for_report(),
+        "params": params or {},
+        "status_code": resp["status_code"],
+        "latency_ms": resp["latency_ms"],
+        "error": resp["error"],
+        "response_text": response_text,
+        "response_truncated": truncated,
+    }
+
+
+def _infer_data_exchange(tx_resp: dict[str, Any], staff_resp: dict[str, Any]) -> dict[str, str]:
+    tx_code = tx_resp.get("status_code")
+    staff_code = staff_resp.get("status_code")
+    if tx_code == 200:
+        return {"status": "likely_on", "reason": "transactions endpoint ok (200)"}
+    if tx_code == 401:
+        return {"status": "auth_error", "reason": "transactions returned 401 (auth error)"}
+    if tx_code == 403 and staff_code == 200:
+        return {
+            "status": "likely_off",
+            "reason": "staff ok (200), transactions=403 → likely no access or data_exchange_gs disabled",
+        }
+    if tx_code == 404:
+        return {"status": "not_found", "reason": "transactions returned 404 (bad endpoint or branch_id)"}
+    if tx_code is None:
+        return {"status": "request_failed", "reason": "transactions failed (timeout/connection error)"}
+    return {"status": "unknown", "reason": f"transactions={tx_code}, staff={staff_code}"}
+
+
+def _run_branch_support_tests(branch_id: int, day: str, timeout: int) -> dict[str, Any]:
+    tx_params = {"page": 1, "count": 5, "start_date": day, "end_date": day}
+    tx = _request_report(
+        "Test A: transactions",
+        "GET",
+        f"/api/v1/transactions/{branch_id}",
+        params=tx_params,
+        timeout=timeout,
+    )
+    staff = _request_report(
+        "Test B: staff list",
+        "GET",
+        f"/api/v1/company/{branch_id}/staff/0",
+        timeout=timeout,
+    )
+    requests = [tx, staff]
+    if staff["status_code"] in {400, 422}:
+        text = staff.get("response_text") or ""
+        if "masterId" in text or "staff_id" in text:
+            fallback = _request_report(
+                "Test B (fallback): staff list",
+                "GET",
+                f"/api/v1/staff/{branch_id}",
+                timeout=timeout,
+            )
+            requests.append(fallback)
+            staff = fallback
+    data_exchange = _infer_data_exchange(tx, staff)
+    return {
+        "branch_id": branch_id,
+        "requests": requests,
+        "data_exchange_gs": data_exchange,
+    }
+
+
+def _render_support_packet_md(packet: dict[str, Any]) -> str:
+    meta = packet.get("meta", {})
+    lines = []
+    lines.append("# SUPPORT_PACKET (YCLIENTS)")
+    lines.append("")
+    lines.append(f"Generated: {meta.get('generated_at')}")
+    lines.append(f"Environment: {meta.get('environment')}")
+    lines.append(f"App URL: {meta.get('app_url')}")
+    lines.append(f"Base URL: {meta.get('base_url')}")
+    lines.append(f"Timeout: {meta.get('timeout_sec')}s")
+    lines.append(f"Concurrency: {meta.get('concurrency')}")
+    lines.append("")
+    lines.append("Tokens (masked):")
+    tokens = meta.get("tokens", {})
+    lines.append(f"- partner: {tokens.get('partner')}")
+    lines.append(f"- user: {tokens.get('user')}")
+    lines.append("")
+    lines.append("Branch IDs (from config):")
+    branch_ids = meta.get("branch_ids") or []
+    lines.append(", ".join(str(b) for b in branch_ids) if branch_ids else "none")
+    lines.append("")
+    lines.append("Notes:")
+    lines.append("- Full JSON payload saved to data/support_packet_latest.json")
+    lines.append("- This file contains only masked tokens.")
+    lines.append("")
+
+    for branch in packet.get("branches", []):
+        lines.append(f"## Branch {branch.get('branch_id')}")
+        data_exchange = branch.get("data_exchange_gs") or {}
+        lines.append(
+            f"data_exchange_gs: {data_exchange.get('status')} ({data_exchange.get('reason')})"
+        )
+        lines.append("")
+        for req in branch.get("requests", []):
+            lines.append(f"### {req.get('name')}")
+            lines.append(f"- Method: {req.get('method')}")
+            lines.append(f"- URL: {req.get('url')}")
+            lines.append(f"- Headers: {req.get('headers')}")
+            lines.append(f"- Params: {json.dumps(req.get('params') or {}, ensure_ascii=True)}")
+            lines.append(
+                f"- Status: {req.get('status_code')} (latency {req.get('latency_ms')} ms)"
+            )
+            if req.get("error"):
+                lines.append(f"- Error: {req.get('error')}")
+            if req.get("response_truncated"):
+                lines.append("- Response: [truncated]")
+            lines.append("Response body:")
+            lines.append("```")
+            lines.append(req.get("response_text") or "")
+            lines.append("```")
+            lines.append("")
+    return "\n".join(lines)
+
+
+def run_support_packet(branch_ids: list[int] | None = None, day: str | None = None) -> dict[str, Any]:
+    timeout = min(max(settings.yclients_timeout, 10), 15)
+    concurrency = 4
+    if not branch_ids:
+        branch_ids = _load_branch_ids()
+    if not day:
+        day = date.today().isoformat()
+    meta = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "environment": _env_label(),
+        "app_url": os.getenv("APP_URL", "https://yclients-heatmap.onrender.com"),
+        "base_url": settings.yclients_base_url,
+        "timeout_sec": timeout,
+        "concurrency": concurrency,
+        "tokens": {
+            "partner": _mask_token_ascii(settings.yclients_partner_token),
+            "user": _mask_token_ascii(settings.yclients_user_token),
+        },
+        "branch_ids": branch_ids,
+        "date": day,
+        "config_path": str(settings.group_config_path),
+    }
+
+    results: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = {
+            executor.submit(_run_branch_support_tests, bid, day, timeout): bid for bid in branch_ids
+        }
+        for future in as_completed(futures):
+            try:
+                results.append(future.result())
+            except Exception as exc:  # noqa: BLE001
+                bid = futures[future]
+                results.append(
+                    {
+                        "branch_id": bid,
+                        "requests": [],
+                        "data_exchange_gs": {
+                            "status": "request_failed",
+                            "reason": f"exception: {exc}",
+                        },
+                    }
+                )
+
+    results.sort(key=lambda x: x.get("branch_id") or 0)
+    packet = {"meta": meta, "branches": results}
+
+    md_path, json_path = _support_packet_paths()
+    json_path.write_text(json.dumps(packet, ensure_ascii=True, indent=2), encoding="utf-8")
+    md_path.write_text(_render_support_packet_md(packet), encoding="utf-8")
+
+    return {"meta": meta, "branches": results, "files": {"md": str(md_path), "json": str(json_path)}}

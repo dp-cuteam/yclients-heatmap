@@ -1,22 +1,40 @@
 const monthSelect = document.getElementById("monthSelect");
 const branchSelect = document.getElementById("branchSelect");
 const monthContainer = document.getElementById("monthContainer");
+const statusMonth = document.getElementById("dataMonth");
+const statusUpdated = document.getElementById("dataUpdated");
+const statusSource = document.getElementById("dataSource");
+const statusCount = document.getElementById("dataCount");
+const statusNote = document.getElementById("dataNote");
+const statusRefresh = document.getElementById("dataRefresh");
 
 const colors = [
-  "#2f5aa8",
-  "#326bb0",
-  "#3381b3",
-  "#3496ac",
-  "#35a695",
-  "#3bb77e",
-  "#69b864",
-  "#93b44f",
-  "#c58a3e",
-  "#e85f3f",
+  "#fff5f5",
+  "#ffe9e9",
+  "#ffdddd",
+  "#ffd1d1",
+  "#ffc5c5",
+  "#ffb9b9",
+  "#ffadad",
+  "#ffa1a1",
+  "#ff9595",
+  "#ff8989",
+  "#ff7d7d",
+  "#ff6f6f",
+  "#ff6161",
+  "#ff5353",
+  "#ff4545",
+  "#ff3737",
+  "#ff2929",
+  "#ff1b1b",
+  "#f11212",
+  "#d90429",
 ];
 
+const SHOW_EDGE_LABELS = false;
+
 function colorFor(pct) {
-  const idx = Math.max(0, Math.min(colors.length - 1, Math.floor(pct / 10)));
+  const idx = Math.max(0, Math.min(colors.length - 1, Math.floor(pct / 5)));
   return colors[idx];
 }
 
@@ -126,10 +144,10 @@ function renderGroupMonth(group, data) {
 
   const grid = document.createElement("div");
   grid.className = "month-grid-wide";
-  grid.style.gridTemplateColumns = `110px repeat(${days.length}, minmax(48px, 1fr))`;
+  grid.style.gridTemplateColumns = `72px repeat(${days.length}, var(--heatmap-cell))`;
 
   const corner = document.createElement("div");
-  corner.className = "cell-head row-head";
+  corner.className = "cell-head row-head corner";
   corner.textContent = "Время";
   grid.appendChild(corner);
 
@@ -154,7 +172,10 @@ function renderGroupMonth(group, data) {
       const cell = document.createElement("div");
       cell.className = "cell";
       cell.style.background = colorFor(cellData.load_pct || 0);
-      cell.textContent = `${Math.round(cellData.load_pct || 0)}%`;
+      const rounded = Math.round(cellData.load_pct || 0);
+      if (SHOW_EDGE_LABELS && (rounded === 10 || rounded === 90)) {
+        cell.textContent = `${rounded}%`;
+      }
       cell.title = `${day.date} ${hour}:00 • ${formatPct(cellData.load_pct || 0)} (${cellData.busy_count}/${cellData.staff_total})`;
       grid.appendChild(cell);
     });
@@ -203,7 +224,12 @@ function renderGroupError(group, err) {
   block.appendChild(header);
   const body = document.createElement("div");
   body.className = "group-empty";
-  body.textContent = `Ошибка загрузки: ${err?.message || err}`;
+  const message = err?.message || err || "Нет данных";
+  if (message.toLowerCase().includes("нет данных")) {
+    body.textContent = message;
+  } else {
+    body.textContent = message.startsWith("Ошибка") ? message : `Ошибка загрузки: ${message}`;
+  }
   block.appendChild(body);
   monthContainer.appendChild(block);
 }
@@ -213,6 +239,13 @@ async function refresh() {
   const month = monthSelect.value;
   if (!branchId || !month) return;
   monthContainer.innerHTML = '<div class="group-empty">Загрузка данных…</div>';
+  let statusData = null;
+  try {
+    statusData = await fetchJSON(`/api/heatmap/status?branch_id=${branchId}&month=${month}`);
+    updateStatus(statusData);
+  } catch (err) {
+    updateStatus(null, err);
+  }
   const groups = await loadGroups();
   monthContainer.innerHTML = "";
   if (!groups.length) {
@@ -222,7 +255,18 @@ async function refresh() {
     monthContainer.appendChild(empty);
     return;
   }
+  const countMap = new Map();
+  if (statusData && statusData.group_counts) {
+    statusData.group_counts.forEach((g) => {
+      countMap.set(g.group_id, g.count);
+    });
+  }
   for (const group of groups) {
+    const cnt = countMap.has(group.group_id) ? countMap.get(group.group_id) : null;
+    if (cnt === 0) {
+      renderGroupError(group, { message: "Нет данных за выбранный месяц." });
+      continue;
+    }
     try {
       const data = await fetchJSON(
         `/api/heatmap/month?branch_id=${branchId}&group_id=${group.group_id}&month=${month}`
@@ -244,7 +288,38 @@ monthSelect.addEventListener("change", refresh);
 branchSelect.addEventListener("change", async () => {
   await refresh();
 });
+if (statusRefresh) {
+  statusRefresh.addEventListener("click", refresh);
+}
 
 init().catch((err) => {
   console.error(err);
 });
+
+function updateStatus(data, error) {
+  if (!statusMonth) return;
+  statusMonth.textContent = monthSelect.value || "—";
+  if (error) {
+    statusUpdated.textContent = "—";
+    statusSource.textContent = "—";
+    statusCount.textContent = "—";
+    statusNote.textContent = "Ошибка получения статуса данных.";
+    statusNote.className = "data-note";
+    return;
+  }
+  const last = data?.last_updated ? new Date(data.last_updated).toLocaleString("ru-RU") : "—";
+  statusUpdated.textContent = last;
+  statusSource.textContent = data?.source || "—";
+  statusCount.textContent = data?.total_rows ?? "—";
+  if (data && data.total_rows > 0) {
+    statusNote.textContent = "Данные загружены.";
+    statusNote.className = "data-note ok";
+  } else if (data && data.db_exists === false) {
+    statusNote.textContent = "База данных не найдена. Проверьте путь к БД.";
+    statusNote.className = "data-note";
+  } else {
+    statusNote.textContent =
+      "Данных нет (возможна первая загрузка или сервер перезапущен). Нажмите «Обновить».";
+    statusNote.className = "data-note";
+  }
+}

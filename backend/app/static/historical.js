@@ -3,20 +3,32 @@ const monthSelect = document.getElementById("histMonth");
 const container = document.getElementById("histContainer");
 
 const colors = [
-  "#2f5aa8",
-  "#326bb0",
-  "#3381b3",
-  "#3496ac",
-  "#35a695",
-  "#3bb77e",
-  "#69b864",
-  "#93b44f",
-  "#c58a3e",
-  "#e85f3f",
+  "#fff5f5",
+  "#ffe9e9",
+  "#ffdddd",
+  "#ffd1d1",
+  "#ffc5c5",
+  "#ffb9b9",
+  "#ffadad",
+  "#ffa1a1",
+  "#ff9595",
+  "#ff8989",
+  "#ff7d7d",
+  "#ff6f6f",
+  "#ff6161",
+  "#ff5353",
+  "#ff4545",
+  "#ff3737",
+  "#ff2929",
+  "#ff1b1b",
+  "#f11212",
+  "#d90429",
 ];
 
+const SHOW_EDGE_LABELS = false;
+
 function colorFor(pct) {
-  const idx = Math.max(0, Math.min(colors.length - 1, Math.floor(pct / 10)));
+  const idx = Math.max(0, Math.min(colors.length - 1, Math.floor(pct / 5)));
   return colors[idx];
 }
 
@@ -75,10 +87,10 @@ function renderTypeMonth(type, hours) {
 
   const grid = document.createElement("div");
   grid.className = "month-grid-wide";
-  grid.style.gridTemplateColumns = `110px repeat(${days.length}, minmax(48px, 1fr))`;
+  grid.style.gridTemplateColumns = `72px repeat(${days.length}, var(--heatmap-cell))`;
 
   const corner = document.createElement("div");
-  corner.className = "cell-head row-head";
+  corner.className = "cell-head row-head corner";
   corner.textContent = "Время";
   grid.appendChild(corner);
 
@@ -103,7 +115,10 @@ function renderTypeMonth(type, hours) {
       const cell = document.createElement("div");
       cell.className = "cell";
       cell.style.background = colorFor(cellData.load_pct || 0);
-      cell.textContent = `${Math.round(cellData.load_pct || 0)}%`;
+      const rounded = Math.round(cellData.load_pct || 0);
+      if (SHOW_EDGE_LABELS && (rounded === 10 || rounded === 90)) {
+        cell.textContent = `${rounded}%`;
+      }
       cell.title = `${day.date} ${hour}:00 • ${formatPct(cellData.load_pct || 0)}`;
       grid.appendChild(cell);
     });
@@ -152,6 +167,9 @@ async function loadBranches() {
   if (data.branches.length) {
     branchSelect.value = data.branches[0].branch_id;
   }
+  if (!data.branches.length) {
+    container.innerHTML = '<div class="group-empty">Нет импортированных данных. Выполните импорт в админке.</div>';
+  }
 }
 
 async function loadMonths(branchId) {
@@ -165,6 +183,9 @@ async function loadMonths(branchId) {
   });
   if (data.months.length) {
     monthSelect.value = data.months[data.months.length - 1];
+  }
+  if (!data.months.length) {
+    container.innerHTML = '<div class="group-empty">Нет данных за выбранный филиал.</div>';
   }
 }
 
@@ -194,6 +215,7 @@ monthSelect.addEventListener("change", refresh);
 
 async function init() {
   await loadBranches();
+  if (!branchSelect.value) return;
   await loadMonths(branchSelect.value);
   await refresh();
 }

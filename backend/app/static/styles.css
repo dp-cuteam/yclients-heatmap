@@ -13,6 +13,9 @@
   --radius-lg: 20px;
   --radius-md: 12px;
   --grid-gap: 8px;
+  --heatmap-cell: 22px;
+  --heatmap-gap: 1px;
+  --heatmap-radius: 2px;
 }
 
 * {
@@ -132,7 +135,7 @@ input {
 .heatmap-section {
   background: var(--shell);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 16px;
   box-shadow: var(--shadow);
 }
 
@@ -156,25 +159,25 @@ input {
   width: 140px;
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #2f5aa8, #3bb77e, #e85f3f);
+  background: linear-gradient(90deg, #fff5f5, #d90429);
 }
 
 .month-container {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .group-block {
   background: var(--shell);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 14px;
   box-shadow: var(--shadow);
 }
 
 .group-header {
   display: grid;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .group-title {
@@ -196,29 +199,41 @@ input {
 }
 
 .month-wide {
-  overflow-x: auto;
+  overflow: auto;
   padding-bottom: 6px;
+  position: relative;
 }
 
 .month-grid-wide {
   display: grid;
-  gap: var(--grid-gap);
+  gap: var(--heatmap-gap);
   min-width: 860px;
+  grid-auto-rows: var(--heatmap-cell);
 }
 
 .month-grid-wide .cell {
-  font-size: 11px;
+  font-size: 0;
 }
 
 .row-head {
   text-align: left;
   font-weight: 600;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 3;
+  min-width: 72px;
 }
 
 .day-head {
   font-size: 11px;
   line-height: 1.2;
   text-align: center;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+  height: 32px;
 }
 
 .day-head.weekend {
@@ -249,10 +264,12 @@ input {
 .cell,
 .cell-head,
 .cell-day {
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: var(--heatmap-radius);
+  padding: 0;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
+  height: var(--heatmap-cell);
+  min-height: var(--heatmap-cell);
 }
 
 .cell-head {
@@ -267,20 +284,22 @@ input {
 }
 
 .cell {
-  color: #fff;
+  color: transparent;
   font-weight: 600;
   position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: none;
 }
 
 .cell:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  transform: none;
+  box-shadow: none;
 }
 
 .cell-total {
   background: #f7f2ec;
   font-weight: 600;
+  font-size: 10px;
+  color: #3b3b3b;
 }
 
 .cell-gray {
@@ -291,18 +310,27 @@ input {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  font-size: 10px;
 }
 
 .gray-dot-mini {
   display: inline-flex;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
   background: #dfd9d2;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 9px;
   color: #534c45;
+}
+
+.corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  background: #fff;
 }
 
 .week-footer {
@@ -444,6 +472,13 @@ input {
   font-size: 18px;
 }
 
+.status-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  word-break: break-word;
+}
+
 .status-log {
   background: #fff;
   border-radius: var(--radius-md);
@@ -452,6 +487,47 @@ input {
   overflow-y: auto;
   font-size: 12px;
   color: #7a6a5f;
+}
+
+.admin-divider {
+  height: 1px;
+  background: #e8e1d9;
+  margin: 18px 0;
+}
+
+.data-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 12px 0 18px;
+  flex-wrap: wrap;
+}
+
+.data-status .status-lines {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.data-status .status-lines strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.data-note {
+  font-size: 12px;
+  color: #8f2d15;
+  background: #ffe1da;
+  padding: 6px 10px;
+  border-radius: 10px;
+  display: inline-block;
+}
+
+.data-note.ok {
+  background: #daf4e6;
+  color: #1f6d45;
 }
 
 .diag-grid {

@@ -104,6 +104,20 @@
       </section>
     </div>
 
+      <section class="diag-logs">
+        <h2>Support packet</h2>
+        <div class="diag-row">
+          <span>Status</span>
+          <span id="supportPacketStatus">?</span>
+        </div>
+        <div class="diag-actions">
+          <button id="supportPacketRun" class="primary">Generate support packet</button>
+          <a id="supportPacketDownload" class="ghost" href="/api/admin/diagnostics/support-packet/download">Download MD</a>
+          <a id="supportPacketDownloadJson" class="ghost" href="/api/admin/diagnostics/support-packet/download?format=json">Download JSON</a>
+        </div>
+        <pre id="supportPacketOutput" class="status-log"></pre>
+      </section>
+
     <script src="/static/diagnostics.js"></script>
   </body>
 </html>

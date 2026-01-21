@@ -46,6 +46,30 @@
           </div>
         </div>
         <pre id="etlErrors" class="status-log"></pre>
+
+        <div class="admin-divider"></div>
+
+        <div class="historical-panel">
+          <h2>Исторические данные (Excel)</h2>
+          <div class="admin-status">
+            <div class="status-card">
+              <div class="status-label">Файл</div>
+              <div id="histFileStatus" class="status-value">—</div>
+              <div id="histFilePath" class="status-meta">—</div>
+            </div>
+            <div class="status-card">
+              <div class="status-label">Последний импорт</div>
+              <div id="histImportStatus" class="status-value">—</div>
+              <div id="histImportMeta" class="status-meta">—</div>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button id="histImport" class="primary">Импортировать</button>
+            <button id="histReimport" class="ghost">Переимпортировать</button>
+            <button id="histListFiles" class="ghost">Файлы в корне</button>
+          </div>
+          <pre id="histFiles" class="status-log"></pre>
+        </div>
       </section>
     </div>
 

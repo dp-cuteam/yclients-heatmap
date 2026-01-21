@@ -64,6 +64,7 @@ class Settings:
     active_branch_ids: list[int] | None
     branch_start_date: date | None
     historical_excel_path: Path
+    historical_db_path: Path
 
 
 def load_settings() -> Settings:
@@ -95,11 +96,17 @@ def load_settings() -> Settings:
         os.getenv("ACTIVE_BRANCH_IDS") or os.getenv("ACTIVE_BRANCH_ID")
     )
     branch_start_date = _parse_date(os.getenv("BRANCH_START_DATE"))
+    historical_excel_env = (
+        os.getenv("HISTORICAL_XLSX_PATH")
+        or os.getenv("HISTORICAL_EXCEL_PATH")
+    )
     historical_excel_path = Path(
-        os.getenv(
-            "HISTORICAL_EXCEL_PATH",
-            BASE_DIR / "Загруженность площадки (тепловая карта).xlsx",
-        )
+        historical_excel_env
+        if historical_excel_env
+        else BASE_DIR / "\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043d\u043e\u0441\u0442\u044c \u043f\u043b\u043e\u0449\u0430\u0434\u043a\u0438 (\u0442\u0435\u043f\u043b\u043e\u0432\u0430\u044f \u043a\u0430\u0440\u0442\u0430).xlsx"
+    )
+    historical_db_path = Path(
+        os.getenv("HISTORICAL_DB_PATH", data_dir / "historical.db")
     )
 
     return Settings(
@@ -121,6 +128,7 @@ def load_settings() -> Settings:
         active_branch_ids=active_branch_ids,
         branch_start_date=branch_start_date,
         historical_excel_path=historical_excel_path,
+        historical_db_path=historical_db_path,
     )
 
 

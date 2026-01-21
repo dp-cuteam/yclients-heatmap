@@ -15,6 +15,10 @@ const logSize = document.getElementById("logSize");
 const logTailBtn = document.getElementById("logTail");
 const logOutput = document.getElementById("logOutput");
 
+const supportBtn = document.getElementById("supportPacketRun");
+const supportStatus = document.getElementById("supportPacketStatus");
+const supportOutput = document.getElementById("supportPacketOutput");
+
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) throw new Error(`Ошибка запроса: ${res.status}`);
@@ -100,6 +104,34 @@ logTailBtn.addEventListener("click", async () => {
 });
 
 runBtn.addEventListener("click", runDiagnostics);
+
+async function runSupportPacket() {
+  if (!supportBtn) return;
+  supportBtn.disabled = true;
+  if (supportStatus) supportStatus.textContent = "running...";
+  if (supportOutput) supportOutput.textContent = "";
+  try {
+    const payload = {
+      date: dateInput.value || null,
+    };
+    const data = await fetchJSON("/api/admin/diagnostics/support-packet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (supportStatus) supportStatus.textContent = "ok";
+    if (supportOutput) supportOutput.textContent = JSON.stringify(data.meta || data, null, 2);
+  } catch (err) {
+    if (supportStatus) supportStatus.textContent = "error";
+    if (supportOutput) supportOutput.textContent = err.message || String(err);
+  } finally {
+    supportBtn.disabled = false;
+  }
+}
+
+if (supportBtn) {
+  supportBtn.addEventListener("click", runSupportPacket);
+}
 
 // Init
 dateInput.value = new Date().toISOString().slice(0, 10);

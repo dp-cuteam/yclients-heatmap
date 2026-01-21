@@ -25,6 +25,15 @@ def get_conn() -> sqlite3.Connection:
         conn.close()
 
 
+@contextmanager
+def get_hist_conn() -> sqlite3.Connection:
+    conn = _connect(settings.historical_db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def init_db() -> None:
     with get_conn() as conn:
         conn.execute(
@@ -83,5 +92,55 @@ def init_db() -> None:
                 error_log TEXT
             );
             """
+        )
+        conn.commit()
+
+
+def init_historical_db() -> None:
+    with get_hist_conn() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS historical_loads (
+                branch_id INTEGER NOT NULL,
+                month TEXT NOT NULL,
+                resource_type TEXT NOT NULL,
+                date TEXT NOT NULL,
+                dow INTEGER NOT NULL,
+                hour INTEGER NOT NULL,
+                load_pct REAL NOT NULL,
+                PRIMARY KEY (branch_id, resource_type, date, hour)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS historical_types (
+                branch_id INTEGER NOT NULL,
+                month TEXT NOT NULL,
+                resource_type TEXT NOT NULL,
+                order_index INTEGER NOT NULL,
+                PRIMARY KEY (branch_id, month, resource_type)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS historical_imports (
+                run_id TEXT PRIMARY KEY,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL,
+                rows_count INTEGER,
+                file_path TEXT,
+                file_mtime REAL,
+                error_log TEXT
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hist_month ON historical_loads(branch_id, month);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hist_date ON historical_loads(branch_id, date);"
         )
         conn.commit()

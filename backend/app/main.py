@@ -13,14 +13,23 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import authenticate, require_admin
 from .config import settings
-from .db import get_conn, init_db
-from .diagnostics import run_diagnostics, _latest_log_info
+from .db import get_conn, init_db, init_historical_db
+from .diagnostics import (
+    run_diagnostics,
+    _latest_log_info,
+    run_support_packet,
+    latest_support_packet_info,
+)
 from .etl import run_full_2025
 from .groups import load_group_config
 from .historical import (
     list_branches as hist_list_branches,
     list_months as hist_list_months,
     month_payload as hist_month_payload,
+    start_import as hist_start_import,
+    run_import as hist_run_import,
+    last_import_status as hist_last_import_status,
+    list_root_files as hist_list_root_files,
 )
 from .scheduler import start_scheduler, stop_scheduler
 from .staff_audit import run_staff_audit
@@ -46,6 +55,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 @app.on_event("startup")
 def on_startup():
     init_db()
+    init_historical_db()
     start_scheduler()
 
 
@@ -183,6 +193,32 @@ def api_historical_month(branch_id: int, month: str, request: Request):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return payload
+
+
+@app.get("/api/admin/historical/status")
+def api_historical_status(request: Request):
+    require_admin(request)
+    status = hist_last_import_status()
+    status["db_path"] = str(settings.historical_db_path)
+    status["db_exists"] = settings.historical_db_path.exists()
+    return status
+
+
+@app.get("/api/admin/historical/files")
+def api_historical_files(request: Request):
+    require_admin(request)
+    return {"files": hist_list_root_files()}
+
+
+@app.post("/api/admin/historical/import")
+def api_historical_import(request: Request, background: BackgroundTasks, payload: dict = Body(default={})):
+    require_admin(request)
+    mode = (payload.get("mode") or "replace").lower()
+    if mode not in {"replace", "append"}:
+        mode = "replace"
+    run_id = hist_start_import(mode)
+    background.add_task(hist_run_import, run_id, mode)
+    return {"status": "started", "run_id": run_id}
 
 
 @app.get("/api/branches/{branch_id}/groups")
@@ -418,6 +454,98 @@ def api_heatmap_month(branch_id: int, group_id: str, month: str, request: Reques
     return {"month": month, "hours": hours, "weeks": weeks, "month_avg": month_avg}
 
 
+@app.get("/api/heatmap/status")
+def api_heatmap_status(branch_id: int, month: str, request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    try:
+        year, mon = month.split("-")
+        year = int(year)
+        mon = int(mon)
+        first = date(year, mon, 1)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Некорректный месяц") from exc
+    last_day = (date(year, mon + 1, 1) - timedelta(days=1)) if mon < 12 else date(year, 12, 31)
+    effective_start = first
+    branch_start = _branch_start_date(branch_id)
+    if branch_start and branch_start > effective_start:
+        effective_start = branch_start
+    db_exists = settings.db_path.exists()
+    if effective_start > last_day:
+        return {
+            "branch_id": branch_id,
+            "month": month,
+            "source": "SQLite",
+            "db_path": str(settings.db_path),
+            "db_exists": db_exists,
+            "last_updated": None,
+            "total_rows": 0,
+            "group_counts": [],
+        }
+    config = load_group_config()
+    branch = next((b for b in config.get("branches", []) if int(b["branch_id"]) == branch_id), None)
+    if not branch:
+        raise HTTPException(status_code=404, detail="Филиал не найден")
+    groups = branch.get("groups", [])
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            SELECT group_id, COUNT(*) as cnt
+            FROM group_hour_load
+            WHERE branch_id = ? AND date BETWEEN ? AND ?
+            GROUP BY group_id
+            """,
+            (branch_id, effective_start.isoformat(), last_day.isoformat()),
+        )
+        counts = {row["group_id"]: int(row["cnt"]) for row in cur.fetchall()}
+        cur2 = conn.execute(
+            "SELECT MAX(updated_at) as last_updated FROM raw_records WHERE branch_id = ?",
+            (branch_id,),
+        )
+        last_updated = cur2.fetchone()["last_updated"]
+        if not last_updated:
+            cur3 = conn.execute(
+                "SELECT finished_at FROM etl_runs ORDER BY started_at DESC LIMIT 1"
+            )
+            row = cur3.fetchone()
+            last_updated = row["finished_at"] if row else None
+
+    total_rows = sum(counts.values())
+    status_log = logging.getLogger("heatmap_status")
+    if total_rows == 0:
+        status_log.warning(
+            "No heatmap data: branch=%s month=%s db=%s",
+            branch_id,
+            month,
+            settings.db_path,
+        )
+
+    group_counts = []
+    for g in groups:
+        gid = g.get("group_id")
+        cnt = counts.get(gid, 0)
+        if cnt == 0:
+            status_log.info(
+                "Zero aggregates: branch=%s group=%s month=%s db=%s",
+                branch_id,
+                gid,
+                month,
+                settings.db_path,
+            )
+        group_counts.append({"group_id": gid, "name": g.get("name"), "count": cnt})
+
+    return {
+        "branch_id": branch_id,
+        "month": month,
+        "source": "SQLite",
+        "db_path": str(settings.db_path),
+        "db_exists": db_exists,
+        "last_updated": last_updated,
+        "total_rows": total_rows,
+        "group_counts": group_counts,
+    }
+
+
 @app.get("/api/summary/month")
 def api_summary(branch_id: int, group_id: str, month: str, request: Request):
     if not request.session.get("user"):
@@ -537,6 +665,44 @@ def api_diagnostics_log_download(request: Request):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Лог не найден")
     return FileResponse(path)
+
+
+
+@app.post("/api/admin/diagnostics/support-packet")
+def api_support_packet(request: Request, payload: dict = Body(default={})):
+    require_admin(request)
+    branch_ids = payload.get("branch_ids")
+    day = payload.get("date")
+    parsed_ids: list[int] | None = None
+    if branch_ids:
+        if isinstance(branch_ids, str):
+            parts = [p.strip() for p in branch_ids.replace(";", ",").split(",") if p.strip()]
+            parsed_ids = []
+            for part in parts:
+                try:
+                    parsed_ids.append(int(part))
+                except Exception:
+                    continue
+        elif isinstance(branch_ids, list):
+            parsed_ids = []
+            for item in branch_ids:
+                try:
+                    parsed_ids.append(int(item))
+                except Exception:
+                    continue
+    result = run_support_packet(branch_ids=parsed_ids, day=day)
+    return result
+
+
+@app.get("/api/admin/diagnostics/support-packet/download")
+def api_support_packet_download(request: Request, format: str = "md"):
+    require_admin(request)
+    info = latest_support_packet_info()
+    path = info["md_path"] if format == "md" else info["json_path"]
+    file_path = Path(path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
 
 
 @app.get("/api/branches/{branch_id}/staff-types")
