@@ -88,17 +88,16 @@
 
 
         <div class="admin-divider"></div>
-
         <section class="audit-panel">
-          <h2>?????? (??? ??? ????-????)</h2>
+          <h2>Товары (для mini-app)</h2>
           <div class="admin-status">
             <div class="status-card">
-              <div class="status-label">??????</div>
+              <div class="status-label">Статус</div>
               <div id="goodsStatus" class="status-value">?</div>
               <div id="goodsError" class="status-meta"></div>
             </div>
             <div class="status-card">
-              <div class="status-label">????????? ?????????????</div>
+              <div class="status-label">Последняя синхронизация</div>
               <div id="goodsLastSync" class="status-value">?</div>
               <div class="status-meta" id="goodsCacheCount">?</div>
             </div>
@@ -109,16 +108,16 @@
               <select id="goodsBranch"></select>
             </div>
             <div class="field" style="min-width: 220px;">
-              <label>????? ?????? (API)</label>
-              <input id="goodsTerm" type="text" placeholder="?????? / ???????" />
+              <label>Поиск товара (API)</label>
+              <input id="goodsTerm" type="text" placeholder="Название / Артикул" />
             </div>
-            <button id="goodsCheck" class="ghost">????????? API</button>
-            <button id="goodsSync" class="primary">????????? ??????</button>
+            <button id="goodsCheck" class="ghost">Проверить API</button>
+            <button id="goodsSync" class="primary">Синхронизировать кэш</button>
           </div>
           <pre id="goodsOutput" class="status-log"></pre>
         </section>
 
-        <div class="admin-divider"></div>
+<div class="admin-divider"></div>
 
         <section class="diag-grid">
           <div class="diag-card">
@@ -217,4 +216,8 @@
     <script src="/static/diagnostics.js" type="module"></script>
   </body>
 </html>
+
+
+
+
 
