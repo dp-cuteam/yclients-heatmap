@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import authenticate, require_admin
 from .config import settings
-from .db import get_conn, init_db, init_historical_db, db_source_label
+from .db import get_conn, init_db, init_historical_db, db_source_label, upsert_sql
 from .diagnostics import (
     run_diagnostics,
     _latest_log_info,
@@ -250,6 +250,157 @@ def _get_storage_id(client, branch_id: int) -> int | None:
         storage_id = _to_int(preferred.get("id"))
     _MINI_CACHE.set(cache_key, storage_id, _MINI_STORAGE_TTL)
     return storage_id
+
+
+def _goods_cache_count(branch_id: int) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM goods_cache WHERE branch_id = ?",
+            (branch_id,),
+        )
+        row = cur.fetchone()
+    return int(row["cnt"] if row and row["cnt"] is not None else 0)
+
+
+def _goods_cache_search(branch_id: int, term: str, limit: int) -> list[dict]:
+    term_lower = term.lower()
+    like_any = f"%{term_lower}%"
+    like_start = f"{term_lower}%"
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            SELECT good_id, title, price, unit
+            FROM goods_cache
+            WHERE branch_id = ?
+              AND LOWER(title) LIKE ?
+            ORDER BY
+              CASE
+                WHEN LOWER(title) = ? THEN 0
+                WHEN LOWER(title) LIKE ? THEN 1
+                ELSE 2
+              END,
+              title
+            LIMIT ?
+            """,
+            (branch_id, like_any, term_lower, like_start, limit),
+        )
+        rows = cur.fetchall()
+    items = []
+    for row in rows:
+        items.append(
+            {
+                "good_id": int(row["good_id"]),
+                "title": row["title"],
+                "price": row["price"],
+                "unit": row["unit"],
+            }
+        )
+    return items
+
+
+def _goods_cache_upsert(branch_id: int, items: list[dict]) -> int:
+    if not items:
+        return 0
+    now = datetime.utcnow().isoformat()
+    rows = []
+    for item in items:
+        good_id = _to_int(item.get("good_id"))
+        title = _clean_text(item.get("title"))
+        if not good_id or not title:
+            continue
+        rows.append(
+            (
+                branch_id,
+                good_id,
+                title,
+                _to_float(item.get("price")) or 0,
+                _clean_text(item.get("unit")),
+                now,
+            )
+        )
+    if not rows:
+        return 0
+    sql = upsert_sql(
+        "goods_cache",
+        ["branch_id", "good_id", "title", "price", "unit", "updated_at"],
+        ["branch_id", "good_id"],
+    )
+    with get_conn() as conn:
+        conn.executemany(sql, rows)
+        conn.commit()
+    return len(rows)
+
+
+def _set_goods_cache_status(branch_id: int, status: str, total_count: int | None = None, error: str | None = None) -> None:
+    now = datetime.utcnow().isoformat()
+    sql = upsert_sql(
+        "goods_cache_status",
+        ["branch_id", "last_sync", "total_count", "status", "error"],
+        ["branch_id"],
+    )
+    with get_conn() as conn:
+        conn.execute(
+            sql,
+            (
+                branch_id,
+                now,
+                total_count,
+                status,
+                error,
+            ),
+        )
+        conn.commit()
+
+
+def _get_goods_cache_status(branch_id: int) -> dict:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT branch_id, last_sync, total_count, status, error FROM goods_cache_status WHERE branch_id = ?",
+            (branch_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {
+            "branch_id": branch_id,
+            "last_sync": None,
+            "total_count": _goods_cache_count(branch_id),
+            "status": "none",
+            "error": None,
+        }
+    row = dict(row)
+    return {
+        "branch_id": branch_id,
+        "last_sync": row.get("last_sync"),
+        "total_count": row.get("total_count"),
+        "status": row.get("status"),
+        "error": row.get("error"),
+    }
+
+
+def _run_goods_sync(branch_id: int) -> None:
+    log = logging.getLogger("goods_sync")
+    client = build_client()
+    _set_goods_cache_status(branch_id, "running", error=None)
+    total = 0
+    page = 1
+    count = 200
+    try:
+        while True:
+            resp = client.list_goods(branch_id, page=page, count=count)
+            data = resp.get("data") or []
+            if not data:
+                break
+            items = [_extract_good_item(raw) for raw in data]
+            total += _goods_cache_upsert(branch_id, items)
+            if len(data) < count:
+                break
+            page += 1
+        total_count = _goods_cache_count(branch_id)
+        _set_goods_cache_status(branch_id, "success", total_count=total_count, error=None)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Goods sync failed for branch %s: %s", branch_id, exc)
+        total_count = _goods_cache_count(branch_id)
+        _set_goods_cache_status(branch_id, "failed", total_count=total_count, error=str(exc))
 
 
 def _audit_mini(
@@ -531,20 +682,27 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
     cache_key = f"mini:goods:{branch_id}:{term.lower()}"
     cached = _MINI_CACHE.get(cache_key)
     if cached is not None:
-        return {"items": cached}
+        return {"items": cached, "source": "memory"}
+
+    limit_val = max(1, min(int(limit or 30), 50))
+    cache_status = _get_goods_cache_status(branch_id)
+    if cache_status.get("status") == "success" and (cache_status.get("total_count") or 0) > 0:
+        items = _goods_cache_search(branch_id, term, limit_val)
+        _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
+        return {"items": items, "source": "cache"}
+
     client = build_client()
-    resp = client.search_goods(branch_id, term, count=min(int(limit or 30), 50))
+    resp = client.search_goods(branch_id, term, count=limit_val)
     items = []
     for raw in resp.get("data") or []:
         item = _extract_good_item(raw)
         if not item.get("good_id") or not item.get("title"):
             continue
         items.append(item)
-    items = _sort_goods(items, term)
-    limit_val = max(1, min(int(limit or 30), 50))
-    items = items[:limit_val]
+    items = _sort_goods(items, term)[:limit_val]
+    _goods_cache_upsert(branch_id, items)
     _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
-    return {"items": items}
+    return {"items": items, "source": "api"}
 
 
 @app.post("/api/mini/records/{record_id}/goods")
@@ -1209,6 +1367,53 @@ def api_status(request: Request):
     if not row:
         return {"status": "none"}
     return dict(row)
+
+
+@app.get("/api/admin/goods/status")
+def api_admin_goods_status(request: Request, branch_id: int):
+    require_admin(request)
+    return _get_goods_cache_status(branch_id)
+
+
+@app.post("/api/admin/goods/sync")
+def api_admin_goods_sync(request: Request, background: BackgroundTasks, payload: dict = Body(default={})):
+    require_admin(request)
+    branch_id = _to_int(payload.get("branch_id"))
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="branch_id is required")
+    background.add_task(_run_goods_sync, branch_id)
+    return {"status": "started", "branch_id": branch_id}
+
+
+@app.post("/api/admin/goods/check")
+def api_admin_goods_check(request: Request, payload: dict = Body(default={})):
+    require_admin(request)
+    branch_id = _to_int(payload.get("branch_id"))
+    term = (payload.get("term") or "").strip()
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="branch_id is required")
+    if len(term) < 2:
+        raise HTTPException(status_code=400, detail="term must be at least 2 chars")
+    client = build_client()
+    try:
+        resp = client.search_goods(branch_id, term, count=10)
+        items = []
+        for raw in resp.get("data") or []:
+            item = _extract_good_item(raw)
+            if item.get("good_id") and item.get("title"):
+                items.append(item)
+        return {
+            "status": "ok",
+            "items": items,
+            "count": len(resp.get("data") or []),
+            "cache_count": _goods_cache_count(branch_id),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "error": str(exc),
+            "cache_count": _goods_cache_count(branch_id),
+        }
 
 @app.post("/api/admin/diagnostics/run")
 def api_diagnostics_run(request: Request, payload: dict = Body(default={})):

@@ -86,6 +86,38 @@
           <pre id="histFiles" class="status-log"></pre>
         </div>
 
+
+        <div class="admin-divider"></div>
+
+        <section class="audit-panel">
+          <h2>?????? (??? ??? ????-????)</h2>
+          <div class="admin-status">
+            <div class="status-card">
+              <div class="status-label">??????</div>
+              <div id="goodsStatus" class="status-value">?</div>
+              <div id="goodsError" class="status-meta"></div>
+            </div>
+            <div class="status-card">
+              <div class="status-label">????????? ?????????????</div>
+              <div id="goodsLastSync" class="status-value">?</div>
+              <div class="status-meta" id="goodsCacheCount">?</div>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <div class="field" style="min-width: 220px;">
+              <label>??????</label>
+              <select id="goodsBranch"></select>
+            </div>
+            <div class="field" style="min-width: 220px;">
+              <label>????? ?????? (API)</label>
+              <input id="goodsTerm" type="text" placeholder="?????? / ???????" />
+            </div>
+            <button id="goodsCheck" class="ghost">????????? API</button>
+            <button id="goodsSync" class="primary">????????? ??????</button>
+          </div>
+          <pre id="goodsOutput" class="status-log"></pre>
+        </section>
+
         <div class="admin-divider"></div>
 
         <section class="diag-grid">

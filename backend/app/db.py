@@ -189,6 +189,33 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS goods_cache (
+                branch_id INTEGER NOT NULL,
+                good_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                price REAL,
+                unit TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (branch_id, good_id)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS goods_cache_status (
+                branch_id INTEGER PRIMARY KEY,
+                last_sync TEXT,
+                total_count INTEGER,
+                status TEXT,
+                error TEXT
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_goods_cache_title ON goods_cache(branch_id, title);"
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS mini_app_audit (
                 created_at TEXT NOT NULL,
                 action TEXT NOT NULL,

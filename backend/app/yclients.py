@@ -138,6 +138,13 @@ class YClientsClient:
     def get_good(self, company_id: int, good_id: int) -> dict[str, Any]:
         return self._request("GET", f"/api/v1/goods/{company_id}/{good_id}")
 
+    def list_goods(self, company_id: int, page: int = 1, count: int = 200) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/api/v1/goods/{company_id}",
+            params={"page": page, "count": count},
+        )
+
 
 def build_client() -> YClientsClient:
     if not settings.yclients_partner_token:
