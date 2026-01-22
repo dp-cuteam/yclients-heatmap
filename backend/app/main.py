@@ -279,22 +279,39 @@ def _get_storage_id(client, branch_id: int) -> int | None:
     cached = _MINI_CACHE.get(cache_key)
     if cached is not None:
         return cached
-    resp = client.get_company(branch_id, include="storages")
-    data = resp.get("data") or {}
-    storages = data.get("storages") or []
+    storages = []
+    try:
+        resp = client.get_company(branch_id, include="storages")
+        data = resp.get("data") or {}
+        storages = data.get("storages") or []
+    except Exception:
+        storages = []
+    if not storages:
+        try:
+            resp = client.list_storages(branch_id)
+            storages = resp.get("data") or []
+        except Exception:
+            storages = []
     if isinstance(storages, dict):
         storages = [storages]
     storage_id = None
     if storages:
         preferred = None
         for storage in storages:
-            if storage.get("is_default") or storage.get("is_main") or storage.get("default"):
+            if (
+                storage.get("for_sale")
+                or storage.get("for_services")
+                or storage.get("is_default")
+                or storage.get("is_main")
+                or storage.get("default")
+            ):
                 preferred = storage
                 break
         if not preferred:
             preferred = storages[0]
-        storage_id = _to_int(preferred.get("id"))
-    _MINI_CACHE.set(cache_key, storage_id, _MINI_STORAGE_TTL)
+        storage_id = _to_int(preferred.get("id") or preferred.get("storage_id"))
+    if storage_id is not None:
+        _MINI_CACHE.set(cache_key, storage_id, _MINI_STORAGE_TTL)
     return storage_id
 
 
@@ -701,7 +718,14 @@ def api_mini_record_detail(record_id: int, branch_id: int, request: Request):
             }
         )
     service_id = services[0]["service_id"] if services else None
-    storage_id = _get_storage_id(client, branch_id)
+    storage_id = _to_int(data.get("storage_id")) or _to_int((data.get("storage") or {}).get("id"))
+    if not storage_id:
+        for service in data.get("services") or []:
+            storage_id = _to_int(service.get("storage_id")) or _to_int((service.get("storage") or {}).get("id"))
+            if storage_id:
+                break
+    if not storage_id:
+        storage_id = _get_storage_id(client, branch_id)
     return {
         "record": {
             "record_id": record_id,
@@ -1387,23 +1411,36 @@ def api_full_last(request: Request):
         }
         for b in config.get("branches", [])
     ]
-    last_map: dict[int, str | None] = {}
+    last_map: dict[int, dict] = {}
+    fallback: dict | None = None
     with get_conn() as conn:
         cur = conn.execute(
             """
-            SELECT branch_id, MAX(finished_at) AS last_full
+            SELECT branch_id, status, started_at, finished_at
             FROM etl_runs
-            WHERE run_type = ? AND status = ? AND branch_id IS NOT NULL
-            GROUP BY branch_id
+            WHERE run_type = ?
+            ORDER BY started_at DESC
             """,
-            ("full_2025", "success"),
+            ("full_2025",),
         )
         for row in cur.fetchall():
-            if row["branch_id"] is None:
+            branch_id = row["branch_id"]
+            record = {
+                "status": row["status"],
+                "started_at": row["started_at"],
+                "finished_at": row["finished_at"],
+            }
+            if branch_id is None:
+                if fallback is None:
+                    fallback = record
                 continue
-            last_map[int(row["branch_id"])] = row["last_full"]
+            branch_id_int = int(branch_id)
+            if branch_id_int not in last_map:
+                last_map[branch_id_int] = record
     for branch in branches:
-        branch["last_full"] = last_map.get(branch["branch_id"])
+        record = last_map.get(branch["branch_id"]) or fallback
+        branch["last_status"] = record.get("status") if record else None
+        branch["last_full"] = (record or {}).get("finished_at") or (record or {}).get("started_at")
     return {"branches": branches}
 
 

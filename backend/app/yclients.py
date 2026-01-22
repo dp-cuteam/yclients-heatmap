@@ -152,6 +152,12 @@ class YClientsClient:
             params={"page": page, "count": count},
         )
 
+    def list_storages(self, company_id: int) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/api/v1/storages/{company_id}",
+        )
+
 
 def build_client() -> YClientsClient:
     if not settings.yclients_partner_token:

@@ -357,6 +357,7 @@ async function addGoodToRecord() {
       good_id: state.selectedGood.good_id,
       amount,
       service_id: state.selectedServiceId,
+      storage_id: state.storageId,
       tg_user: state.tgUser,
     };
     const data = await postJSON(`${withBase("/api/mini/records")}/${state.selectedRecord.record_id}/goods`, payload);

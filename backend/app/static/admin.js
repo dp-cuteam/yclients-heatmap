@@ -72,21 +72,29 @@ async function refreshFullBranchStatus() {
     const rows = data.branches || [];
     etlBranchTable.innerHTML = "";
     if (!rows.length) {
-      etlBranchTable.innerHTML = "<tr><td colspan=\"2\">Данные отсутствуют.</td></tr>";
+      etlBranchTable.innerHTML = "<tr><td colspan=\"3\">Данные отсутствуют.</td></tr>";
       return;
     }
     rows.forEach((row) => {
       const tr = document.createElement("tr");
       const nameCell = document.createElement("td");
       nameCell.textContent = row.display_name || row.branch_id;
+      const statusCell = document.createElement("td");
+      const statusMap = {
+        running: "Выполняется",
+        success: "Успешно",
+        failed: "Ошибка",
+      };
+      statusCell.textContent = statusMap[row.last_status] || row.last_status || "—";
       const lastCell = document.createElement("td");
       lastCell.textContent = row.last_full ? new Date(row.last_full).toLocaleString("ru-RU") : "—";
       tr.appendChild(nameCell);
+      tr.appendChild(statusCell);
       tr.appendChild(lastCell);
       etlBranchTable.appendChild(tr);
     });
   } catch (err) {
-    etlBranchTable.innerHTML = "<tr><td colspan=\"2\">Ошибка загрузки.</td></tr>";
+    etlBranchTable.innerHTML = "<tr><td colspan=\"3\">Ошибка загрузки.</td></tr>";
   }
 }
 
