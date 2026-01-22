@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CUTEAM · Исторические данные</title>
+    <title>CUTEAM · Теплокарты свод</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -11,12 +11,12 @@
       <header class="topbar">
         <div>
           <div class="eyebrow">CUTEAM</div>
-          <h1>Исторические данные</h1>
-          <p class="subtitle">Тепловая карта из Excel-архива</p>
+          <h1>Теплокарты · свод</h1>
+          <p class="subtitle">Средняя загрузка за месяц по всем филиалам и ресурсам</p>
         </div>
         <div class="actions">
           <a class="ghost" href="/">К теплокарте</a>
-          <a class="ghost" href="/summary">Теплокарты свод</a>
+          <a class="ghost" href="/historical">Исторические данные</a>
           <a class="ghost" href="/admin">Админка</a>
           <form method="post" action="/logout">
             <button class="ghost" type="submit">Выйти</button>
@@ -24,20 +24,9 @@
         </div>
       </header>
 
-      <section class="filters">
-        <div class="field">
-          <label>Филиалы коворкинга</label>
-          <select id="histBranch"></select>
-        </div>
-        <div class="field">
-          <label>Месяц</label>
-          <select id="histMonth"></select>
-        </div>
-      </section>
-
       <section class="heatmap-section">
         <div class="section-header">
-          <h2>Исторические данные (строки — время, столбцы — дни)</h2>
+          <h2>Сводная таблица (строки — месяцы, столбцы — годы)</h2>
           <div class="legend">
             <span>0%</span>
             <div class="legend-bar"></div>
@@ -54,12 +43,11 @@
             </label>
           </div>
         </div>
-        <p class="subtitle">Разделители: после 9:00 и перед 22:00. Источник: БД (импорт из Excel), отдельно от основного отчёта.</p>
-        <div id="histContainer" class="month-container"></div>
+        <p class="subtitle">Пустые ячейки означают отсутствие данных за месяц.</p>
+        <div id="summaryContainer" class="summary-container"></div>
       </section>
     </div>
 
-    <script src="/static/historical.js"></script>
+    <script src="/static/summary.js"></script>
   </body>
 </html>
-

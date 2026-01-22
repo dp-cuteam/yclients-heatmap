@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
+import json
 import logging
 import time
 from typing import Any
@@ -521,6 +522,36 @@ def _audit_mini(
     except Exception:  # noqa: BLE001
         logging.getLogger("mini_app").warning("Failed to write mini app audit log.")
 
+def _log_mini_yclients_response(
+    action: str,
+    branch_id: int,
+    record_id: int,
+    visit_id: int | None,
+    payload: dict[str, Any] | None,
+    response: dict[str, Any] | None,
+    status: str = "ok",
+    error: str | None = None,
+) -> None:
+    log_path = settings.data_dir / "mini_app_yclients.log"
+    entry = {
+        "ts": datetime.utcnow().isoformat(),
+        "action": action,
+        "branch_id": branch_id,
+        "record_id": record_id,
+        "visit_id": visit_id,
+        "status": status,
+        "error": error,
+        "payload": payload,
+        "response": response,
+    }
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False, default=str))
+            handle.write("\n")
+    except Exception:  # noqa: BLE001
+        logging.getLogger("mini_app").warning("Failed to log mini app YCLIENTS response.")
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     if not request.session.get("user"):
@@ -542,6 +573,12 @@ def admin_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
     return templates.TemplateResponse("admin.html", {"request": request})
+
+@app.get("/summary", response_class=HTMLResponse)
+def summary_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("summary.html", {"request": request})
 
 @app.get("/mini", response_class=HTMLResponse)
 def mini_app_page(request: Request):
@@ -823,6 +860,16 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     try:
         resp = client.update_visit(visit_id, record_id, visit_payload)
     except Exception as exc:  # noqa: BLE001
+        _log_mini_yclients_response(
+            "add",
+            branch_id,
+            record_id,
+            visit_id,
+            visit_payload,
+            None,
+            status="error",
+            error=str(exc),
+        )
         _audit_mini(
             "add",
             branch_id,
@@ -837,6 +884,14 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
             error=str(exc),
         )
         raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
+    _log_mini_yclients_response(
+        "add",
+        branch_id,
+        record_id,
+        visit_id,
+        visit_payload,
+        resp,
+    )
 
     added_tx = _find_goods_tx_id(resp.get("data") or {}, good_id, tx_amount, storage_id)
     if not added_tx:
@@ -1236,16 +1291,16 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
     db_exists = True if source_label == "Postgres" else settings.db_path.exists()
     db_path = "DATABASE_URL" if source_label == "Postgres" else str(settings.db_path)
     if effective_start > last_day:
-        return {
-            "branch_id": branch_id,
-            "month": month,
-            "source": source_label,
-            "db_path": db_path,
-            "db_exists": db_exists,
-            "last_updated": None,
-            "total_rows": 0,
-            "group_counts": [],
-        }
+    return {
+        "branch_id": branch_id,
+        "month": month,
+        "source": source_label,
+        "db_path": db_path,
+        "db_exists": db_exists,
+        "last_updated": None,
+        "total_rows": 0,
+        "group_counts": [],
+    }
     config = load_group_config()
     branch = next((b for b in config.get("branches", []) if int(b["branch_id"]) == branch_id), None)
     if not branch:
@@ -1311,6 +1366,87 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
         "total_rows": total_rows,
         "group_counts": group_counts,
     }
+
+
+@app.get("/api/heatmap/summary")
+def api_heatmap_summary(
+    request: Request,
+    start_year: int = 2023,
+    end_year: int | None = None,
+):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    if end_year is None:
+        end_year = datetime.now(ZoneInfo(settings.timezone)).year
+    if start_year > end_year:
+        raise HTTPException(status_code=400, detail="Некорректный диапазон лет")
+    years = list(range(start_year, end_year + 1))
+    months = [
+        {"num": 1, "label": "Январь", "short": "Янв"},
+        {"num": 2, "label": "Февраль", "short": "Фев"},
+        {"num": 3, "label": "Март", "short": "Мар"},
+        {"num": 4, "label": "Апрель", "short": "Апр"},
+        {"num": 5, "label": "Май", "short": "Май"},
+        {"num": 6, "label": "Июнь", "short": "Июн"},
+        {"num": 7, "label": "Июль", "short": "Июл"},
+        {"num": 8, "label": "Август", "short": "Авг"},
+        {"num": 9, "label": "Сентябрь", "short": "Сен"},
+        {"num": 10, "label": "Октябрь", "short": "Окт"},
+        {"num": 11, "label": "Ноябрь", "short": "Ноя"},
+        {"num": 12, "label": "Декабрь", "short": "Дек"},
+    ]
+    start_date = date(start_year, 1, 1)
+    end_date = date(end_year, 12, 31)
+    config = ensure_branch_names(load_group_config())
+    branches_out: list[dict[str, Any]] = []
+    with get_conn() as conn:
+        for branch in config.get("branches", []):
+            branch_id = _to_int(branch.get("branch_id"))
+            if not branch_id:
+                continue
+            effective_start = start_date
+            branch_start = _branch_start_date(branch_id)
+            if branch_start and branch_start > effective_start:
+                effective_start = branch_start
+            values_by_group: dict[str, dict[str, float]] = {}
+            if effective_start <= end_date:
+                cur = conn.execute(
+                    """
+                    SELECT group_id, substr(date, 1, 7) AS ym, AVG(load_pct) AS avg_load
+                    FROM group_hour_load
+                    WHERE branch_id = ? AND date BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
+                    GROUP BY group_id, ym
+                    """,
+                    (branch_id, effective_start.isoformat(), end_date.isoformat()),
+                )
+                for row in cur.fetchall():
+                    group_id = str(row["group_id"])
+                    ym = row["ym"]
+                    avg = row["avg_load"]
+                    if avg is None:
+                        continue
+                    values_by_group.setdefault(group_id, {})[ym] = round(float(avg), 2)
+            groups = branch.get("groups", [])
+            indexed_groups = list(enumerate(groups))
+            indexed_groups.sort(key=lambda item: resource_sort_key(item[1].get("name"), item[0]))
+            groups_out: list[dict[str, Any]] = []
+            for _, group in indexed_groups:
+                group_id = str(group.get("group_id") or "")
+                groups_out.append(
+                    {
+                        "group_id": group_id,
+                        "name": group.get("name") or group_id,
+                        "values": values_by_group.get(group_id, {}),
+                    }
+                )
+            branches_out.append(
+                {
+                    "branch_id": branch_id,
+                    "display_name": branch.get("display_name") or str(branch_id),
+                    "groups": groups_out,
+                }
+            )
+    return {"years": years, "months": months, "branches": branches_out}
 
 @app.get("/api/summary/month")
 def api_summary(branch_id: int, group_id: str, month: str, request: Request):
