@@ -81,7 +81,7 @@ def save_group_config(config: dict) -> None:
     )
 
 
-def resolve_staff_ids(config: dict, client: YClientsClient) -> dict:
+def resolve_staff_ids(config: dict, client: YClientsClient, branch_ids: list[int] | None = None) -> dict:
     resolved = deepcopy(config)
     log = logging.getLogger("groups")
     company_names = {}
@@ -100,6 +100,8 @@ def resolve_staff_ids(config: dict, client: YClientsClient) -> dict:
             current = (branch.get("display_name") or "").strip()
             if not current or current == str(branch_id):
                 branch["display_name"] = company_names[branch_id]
+        if branch_ids and branch_id not in branch_ids:
+            continue
         staff_resp = client.get_staff(branch_id)
         staff_list = staff_resp.get("data") or []
         by_name = {}

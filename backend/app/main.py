@@ -243,10 +243,11 @@ def _guess_price(good: dict) -> float:
 
 
 def _extract_good_item(raw: dict) -> dict:
-    good_id = _to_int(raw.get("good_id") or raw.get("id"))
+    good_id = _to_int(raw.get("good_id") or raw.get("id") or raw.get("item_id"))
     title = _clean_text(raw.get("title") or raw.get("label") or raw.get("value"))
     unit = _clean_text(raw.get("service_unit_short_title") or raw.get("unit_short_title") or raw.get("unit") or raw.get("service_unit"))
-    price = _guess_price(raw)
+    has_price = any(raw.get(key) is not None for key in ("unit_actual_cost", "unit_cost", "actual_cost", "cost", "price"))
+    price = _guess_price(raw) if has_price else None
     return {
         "good_id": good_id,
         "title": title,
@@ -353,12 +354,13 @@ def _goods_cache_upsert(branch_id: int, items: list[dict]) -> int:
         title = _clean_text(item.get("title"))
         if not good_id or not title:
             continue
+        price_val = _to_float(item.get("price"))
         rows.append(
             (
                 branch_id,
                 good_id,
                 title,
-                _to_float(item.get("price")) or 0,
+                price_val,
                 _clean_text(item.get("unit")),
                 now,
             )
@@ -728,7 +730,7 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
 
     limit_val = max(1, min(int(limit or 30), 50))
     cache_status = _get_goods_cache_status(branch_id)
-    if cache_status.get("status") == "success" and (cache_status.get("total_count") or 0) > 0:
+    if (cache_status.get("total_count") or 0) > 0:
         items = _goods_cache_search(branch_id, term, limit_val)
         _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
         return {"items": items, "source": "cache"}
@@ -1355,11 +1357,16 @@ def api_summary(branch_id: int, group_id: str, month: str, request: Request):
     return {"avg_day": avg_day, "avg_week": avg_week, "avg_month": avg_month}
 
 @app.post("/api/admin/etl/full_2025/start")
-def api_start_full(request: Request, background: BackgroundTasks):
+def api_start_full(request: Request, background: BackgroundTasks, payload: dict = Body(default={})):
     require_admin(request)
+    branch_id = _to_int(payload.get("branch_id"))
+    if branch_id is not None:
+        config = load_group_config()
+        if not any(int(b["branch_id"]) == branch_id for b in config.get("branches", [])):
+            raise HTTPException(status_code=400, detail="Unknown branch_id")
     client = build_client()
-    background.add_task(run_full_2025, client)
-    return {"status": "started"}
+    background.add_task(run_full_2025, client, branch_id)
+    return {"status": "started", "branch_id": branch_id}
 
 
 @app.post("/api/admin/etl/daily/start")
@@ -1374,12 +1381,43 @@ def api_status(request: Request):
     require_admin(request)
     with get_conn() as conn:
         cur = conn.execute(
-            "SELECT run_id, run_type, started_at, finished_at, status, progress, error_log FROM etl_runs ORDER BY started_at DESC LIMIT 1"
+            "SELECT run_id, run_type, branch_id, started_at, finished_at, status, progress, error_log FROM etl_runs ORDER BY started_at DESC LIMIT 1"
         )
         row = cur.fetchone()
     if not row:
         return {"status": "none"}
     return dict(row)
+
+
+@app.get("/api/admin/etl/full/last")
+def api_full_last(request: Request):
+    require_admin(request)
+    config = ensure_branch_names(load_group_config())
+    branches = [
+        {
+            "branch_id": int(b["branch_id"]),
+            "display_name": b.get("display_name", str(b["branch_id"])),
+        }
+        for b in config.get("branches", [])
+    ]
+    last_map: dict[int, str | None] = {}
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            SELECT branch_id, MAX(finished_at) AS last_full
+            FROM etl_runs
+            WHERE run_type = ? AND status = ? AND branch_id IS NOT NULL
+            GROUP BY branch_id
+            """,
+            ("full_2025", "success"),
+        )
+        for row in cur.fetchall():
+            if row["branch_id"] is None:
+                continue
+            last_map[int(row["branch_id"])] = row["last_full"]
+    for branch in branches:
+        branch["last_full"] = last_map.get(branch["branch_id"])
+    return {"branches": branches}
 
 
 @app.get("/api/admin/goods/status")

@@ -4,6 +4,8 @@ const statusEl = document.getElementById("etlStatus");
 const progressEl = document.getElementById("etlProgress");
 const timeEl = document.getElementById("etlTime");
 const errorsEl = document.getElementById("etlErrors");
+const etlBranch = document.getElementById("etlBranch");
+const etlBranchTable = document.getElementById("etlBranchTable");
 const histFileStatus = document.getElementById("histFileStatus");
 const histFilePath = document.getElementById("histFilePath");
 const histImportStatus = document.getElementById("histImportStatus");
@@ -47,6 +49,50 @@ async function refreshStatus() {
   progressEl.textContent = data.progress || "—";
   timeEl.textContent = data.finished_at || data.started_at || "—";
   errorsEl.textContent = data.error_log || "";
+}
+
+async function loadEtlBranches() {
+  if (!etlBranch) return;
+  etlBranch.innerHTML = "";
+  try {
+    const data = await fetchJSON("/api/branches");
+    (data.branches || []).forEach((b) => {
+      const opt = document.createElement("option");
+      opt.value = b.branch_id;
+      opt.textContent = b.display_name;
+      etlBranch.appendChild(opt);
+    });
+  } catch (err) {
+    console.warn("Failed to load ETL branches", err);
+  }
+  if (!etlBranch.value && etlBranch.options.length) {
+    etlBranch.value = etlBranch.options[0].value;
+  }
+}
+
+async function refreshFullBranchStatus() {
+  if (!etlBranchTable) return;
+  try {
+    const data = await fetchJSON("/api/admin/etl/full/last");
+    const rows = data.branches || [];
+    etlBranchTable.innerHTML = "";
+    if (!rows.length) {
+      etlBranchTable.innerHTML = "<tr><td colspan=\"2\">Данные отсутствуют.</td></tr>";
+      return;
+    }
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      const nameCell = document.createElement("td");
+      nameCell.textContent = row.display_name || row.branch_id;
+      const lastCell = document.createElement("td");
+      lastCell.textContent = row.last_full ? new Date(row.last_full).toLocaleString("ru-RU") : "—";
+      tr.appendChild(nameCell);
+      tr.appendChild(lastCell);
+      etlBranchTable.appendChild(tr);
+    });
+  } catch (err) {
+    etlBranchTable.innerHTML = "<tr><td colspan=\"2\">Ошибка загрузки.</td></tr>";
+  }
 }
 
 function formatBytes(bytes) {
@@ -138,13 +184,22 @@ startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
   if (dailyBtn) dailyBtn.disabled = true;
   try {
-    await fetchJSON("/api/admin/etl/full_2025/start", { method: "POST" });
+    const payload = {};
+    if (etlBranch && etlBranch.value) {
+      payload.branch_id = etlBranch.value;
+    }
+    await fetchJSON("/api/admin/etl/full_2025/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
   } catch (err) {
     console.error(err);
   } finally {
     startBtn.disabled = false;
     if (dailyBtn) dailyBtn.disabled = false;
     await refreshStatus();
+    await refreshFullBranchStatus();
   }
 });
 
@@ -168,6 +223,8 @@ setInterval(refreshStatus, 5000);
 refreshStatus().catch((err) => console.error(err));
 refreshHistoricalStatus().catch((err) => console.error(err));
 setInterval(refreshHistoricalStatus, 10000);
+loadEtlBranches().then(refreshFullBranchStatus);
+setInterval(refreshFullBranchStatus, 15000);
 
 function loadPaletteSetting() {
   const current = localStorage.getItem("heatmapPalette") || "perceptual";

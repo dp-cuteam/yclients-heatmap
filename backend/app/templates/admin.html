@@ -38,6 +38,10 @@
           </div>
         </div>
         <div class="admin-actions">
+          <div class="field" style="min-width: 220px;">
+            <label>Филиал для полной загрузки</label>
+            <select id="etlBranch"></select>
+          </div>
           <button id="startFull" class="primary">Полная загрузка (с 2025 по сегодня)</button>
           <button id="startDaily" class="ghost">Дневная загрузка (вчера)</button>
         </div>
@@ -61,6 +65,18 @@
           </div>
         </div>
         <pre id="etlErrors" class="status-log"></pre>
+        <div class="etl-branch-panel">
+          <div class="status-label">Последние полные загрузки по филиалам</div>
+          <table class="etl-table">
+            <thead>
+              <tr>
+                <th>Филиал</th>
+                <th>Последняя полная загрузка</th>
+              </tr>
+            </thead>
+            <tbody id="etlBranchTable"></tbody>
+          </table>
+        </div>
 
         <div class="admin-divider"></div>
 

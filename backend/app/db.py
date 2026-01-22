@@ -179,6 +179,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS etl_runs (
                 run_id TEXT PRIMARY KEY,
                 run_type TEXT NOT NULL,
+                branch_id INTEGER,
                 started_at TEXT NOT NULL,
                 finished_at TEXT,
                 status TEXT NOT NULL,
@@ -187,6 +188,16 @@ def init_db() -> None:
             );
             """
         )
+        try:
+            if USE_POSTGRES:
+                conn.execute("ALTER TABLE etl_runs ADD COLUMN IF NOT EXISTS branch_id INTEGER;")
+            else:
+                cur = conn.execute("PRAGMA table_info(etl_runs);")
+                cols = {row["name"] for row in cur.fetchall()}
+                if "branch_id" not in cols:
+                    conn.execute("ALTER TABLE etl_runs ADD COLUMN branch_id INTEGER;")
+        except Exception:  # noqa: BLE001
+            pass
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS goods_cache (

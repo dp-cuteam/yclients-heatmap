@@ -15,16 +15,16 @@ from .yclients import YClientsClient
 ATTENDANCE_FACT = {1, 2}
 
 
-def _start_run(run_type: str) -> str:
+def _start_run(run_type: str, branch_id: int | None = None) -> str:
     run_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO etl_runs(run_id, run_type, started_at, status, progress, error_log)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO etl_runs(run_id, run_type, branch_id, started_at, status, progress, error_log)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, run_type, now, "running", "0%", ""),
+            (run_id, run_type, branch_id, now, "running", "0%", ""),
         )
         conn.commit()
     return run_id
@@ -258,43 +258,61 @@ def _to_raw_row(rec: dict) -> tuple:
     )
 
 
-def run_full_2025(client: YClientsClient) -> str:
-    run_id = _start_run("full_2025")
-    try:
-        config = load_group_config()
-        resolved = resolve_staff_ids(config, client)
-        save_group_config(resolved)
+def _run_full_for_branch(client: YClientsClient, resolved: dict, branch_id: int, run_id: str) -> None:
+    start_date = date(2025, 1, 1)
+    if settings.branch_start_date and (
+        not settings.active_branch_ids or branch_id in settings.active_branch_ids
+    ):
+        if settings.branch_start_date > start_date:
+            start_date = settings.branch_start_date
+    tz = ZoneInfo(settings.timezone)
+    end_date = datetime.now(tz=tz).date()
+    if end_date < start_date:
+        end_date = start_date
 
-        for branch in resolved.get("branches", []):
-            branch_id = int(branch["branch_id"])
-            start_date = date(2025, 1, 1)
-            if settings.branch_start_date and (
-                not settings.active_branch_ids or branch_id in settings.active_branch_ids
-            ):
-                if settings.branch_start_date > start_date:
-                    start_date = settings.branch_start_date
-            tz = ZoneInfo(settings.timezone)
-            end_date = datetime.now(tz=tz).date()
-            if end_date < start_date:
-                end_date = start_date
+    def progress_cb(bid, page, total):
+        if total:
+            _update_run(run_id, progress=f"{bid}: page {page} / ~{total}")
+        else:
+            _update_run(run_id, progress=f"{bid}: page {page}")
 
-            def progress_cb(bid, page, total):
-                if total:
-                    _update_run(run_id, progress=f"{bid}: page {page} / ~{total}")
-                else:
-                    _update_run(run_id, progress=f"{bid}: page {page}")
+    raw_records = _fetch_records_for_period(client, branch_id, start_date, end_date, progress_cb)
+    normalized = _normalize_records(branch_id, raw_records)
+    _upsert_raw_records([_to_raw_row(r) for r in normalized])
 
-            raw_records = _fetch_records_for_period(client, branch_id, start_date, end_date, progress_cb)
-            normalized = _normalize_records(branch_id, raw_records)
-            _upsert_raw_records([_to_raw_row(r) for r in normalized])
+    _rebuild_staff_hour_busy(branch_id, start_date, end_date, normalized)
+    _rebuild_group_hour_load(branch_id, resolved, start_date, end_date)
 
-            _rebuild_staff_hour_busy(branch_id, start_date, end_date, normalized)
-            _rebuild_group_hour_load(branch_id, resolved, start_date, end_date)
 
-        _update_run(run_id, status="success", progress="100%", finished=True)
-    except Exception as exc:  # noqa: BLE001
-        _update_run(run_id, status="failed", error=str(exc), finished=True)
-    return run_id
+def run_full_2025(client: YClientsClient, branch_id: int | None = None) -> str:
+    config = load_group_config()
+    branches = config.get("branches", [])
+    if branch_id is not None:
+        if not any(int(b["branch_id"]) == branch_id for b in branches):
+            raise RuntimeError(f"Unknown branch_id {branch_id}")
+        run_id = _start_run("full_2025", branch_id=branch_id)
+        try:
+            resolved = resolve_staff_ids(config, client, branch_ids=[branch_id])
+            save_group_config(resolved)
+            _run_full_for_branch(client, resolved, branch_id, run_id)
+            _update_run(run_id, status="success", progress="100%", finished=True)
+        except Exception as exc:  # noqa: BLE001
+            _update_run(run_id, status="failed", error=str(exc), finished=True)
+        return run_id
+
+    last_run_id = ""
+    for branch in branches:
+        bid = int(branch["branch_id"])
+        run_id = _start_run("full_2025", branch_id=bid)
+        last_run_id = run_id
+        try:
+            config = resolve_staff_ids(config, client, branch_ids=[bid])
+            save_group_config(config)
+            _run_full_for_branch(client, config, bid, run_id)
+            _update_run(run_id, status="success", progress="100%", finished=True)
+        except Exception as exc:  # noqa: BLE001
+            _update_run(run_id, status="failed", error=str(exc), finished=True)
+    return last_run_id
 
 
 def run_daily(client: YClientsClient, target_day: date | None = None) -> str:
