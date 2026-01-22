@@ -807,13 +807,15 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         "attendance": attendance,
         "comment": comment,
         "services": [],
-        "goods_transactions": [
+        "new_transactions": [
             {
                 "good_id": good_id,
                 "storage_id": storage_id,
-                "price": price,
                 "cost": cost,
+                "cost_per_unit": price,
+                "discount": 0,
                 "amount": tx_amount,
+                "operation_unit_type": 1,
                 "good_special_number": good_special_number,
             }
         ],
