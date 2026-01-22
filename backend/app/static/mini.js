@@ -58,6 +58,10 @@ function showToast(message, tone = "info") {
 
 async function fetchJSON(url) {
   const res = await fetch(url);
+  if (res.status === 401) {
+    window.location = "/login?next=/mini";
+    throw new Error("Не авторизован");
+  }
   if (!res.ok) {
     throw new Error(`Ошибка запроса: ${res.status}`);
   }
@@ -70,6 +74,10 @@ async function postJSON(url, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  if (res.status === 401) {
+    window.location = "/login?next=/mini";
+    throw new Error("Не авторизован");
+  }
   if (!res.ok) {
     let message = `Ошибка запроса: ${res.status}`;
     try {

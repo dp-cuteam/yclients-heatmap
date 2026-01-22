@@ -24,6 +24,9 @@
           Пароль
           <input type="password" name="password" required autocomplete="current-password" />
         </label>
+        {% if next_url %}
+        <input type="hidden" name="next_url" value="{{ next_url }}" />
+        {% endif %}
         {% if error %}
         <div class="auth-error">{{ error }}</div>
         {% endif %}

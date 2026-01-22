@@ -83,6 +83,11 @@ def _branch_start_date(branch_id: int) -> date | None:
     return settings.branch_start_date
 
 
+def _require_session(request: Request) -> None:
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="РќРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ")
+
+
 class _TTLCache:
     def __init__(self) -> None:
         self._store: dict[str, dict[str, Any]] = {}
@@ -325,6 +330,8 @@ def admin_page(request: Request):
 
 @app.get("/mini", response_class=HTMLResponse)
 def mini_app_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login?next=/mini", status_code=302)
     return templates.TemplateResponse("mini.html", {"request": request})
 
 @app.get("/admin/diagnostics", response_class=HTMLResponse)
@@ -335,14 +342,27 @@ def diagnostics_page(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    next_url = request.query_params.get("next")
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": None, "next_url": next_url},
+    )
 
 @app.post("/login", response_class=HTMLResponse)
-def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next_url: str | None = Form(default=None),
+):
     if authenticate(username, password):
         request.session["user"] = username
-        return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request, "error": "Неверный логин/пароль"})
+        target = next_url or "/"
+        return RedirectResponse(target, status_code=302)
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error": "???????????????? ??????????/????????????", "next_url": next_url},
+    )
 
 @app.post("/logout")
 def logout(request: Request):
@@ -362,7 +382,8 @@ def api_branches(request: Request):
 
 
 @app.get("/api/mini/branches")
-def api_mini_branches():
+def api_mini_branches(request: Request):
+    _require_session(request)
     client = build_client()
     branches: list[dict] = []
     try:
@@ -394,12 +415,14 @@ def api_mini_branches():
 
 @app.get("/api/mini/records")
 def api_mini_records(
+    request: Request,
     branch_id: int,
     mode: str = "now",
     q: str = "",
     hours: int = 4,
     limit: int = 60,
 ):
+    _require_session(request)
     client = build_client()
     tz = ZoneInfo(settings.timezone)
     now = datetime.now(tz=tz)
@@ -463,7 +486,8 @@ def api_mini_records(
 
 
 @app.get("/api/mini/records/{record_id}")
-def api_mini_record_detail(record_id: int, branch_id: int):
+def api_mini_record_detail(record_id: int, branch_id: int, request: Request):
+    _require_session(request)
     client = build_client()
     resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
     data = resp.get("data") or {}
@@ -499,7 +523,8 @@ def api_mini_record_detail(record_id: int, branch_id: int):
 
 
 @app.get("/api/mini/goods/search")
-def api_mini_goods_search(branch_id: int, term: str, limit: int = 30):
+def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: int = 30):
+    _require_session(request)
     term = (term or "").strip()
     if len(term) < 2:
         return {"items": []}
@@ -523,7 +548,8 @@ def api_mini_goods_search(branch_id: int, term: str, limit: int = 30):
 
 
 @app.post("/api/mini/records/{record_id}/goods")
-def api_mini_add_good(record_id: int, payload: dict = Body(default={})):
+def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(default={})):
+    _require_session(request)
     branch_id = _to_int(payload.get("branch_id"))
     good_id = _to_int(payload.get("good_id"))
     amount = _to_float(payload.get("amount"))
@@ -649,7 +675,8 @@ def api_mini_add_good(record_id: int, payload: dict = Body(default={})):
 
 
 @app.post("/api/mini/records/{record_id}/goods/undo")
-def api_mini_undo_good(record_id: int, payload: dict = Body(default={})):
+def api_mini_undo_good(request: Request, record_id: int, payload: dict = Body(default={})):
+    _require_session(request)
     branch_id = _to_int(payload.get("branch_id"))
     service_id = _to_int(payload.get("service_id"))
     goods_transaction_id = _to_int(payload.get("goods_transaction_id"))
