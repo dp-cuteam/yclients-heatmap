@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap");
 
 :root {
   --ink: #1c1a17;
@@ -440,7 +440,7 @@ input {
   background: var(--card);
   border-radius: var(--radius-lg);
   padding: 28px;
-  max-width: 1300px;
+  max-width: 420px;
   width: 100%;
   box-shadow: var(--shadow);
 }
@@ -451,6 +451,13 @@ input {
   align-items: flex-start;
   flex-wrap: wrap;
   margin-bottom: 20px;
+}
+
+.auth-title {
+  font-size: 40px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
 }
 
 .logo-mark {
@@ -468,8 +475,9 @@ input {
 
 .auth-logo {
   display: block;
-  width: 1260px;
-  max-width: 100%;
+  max-width: 180px;
+  max-height: 56px;
+  width: auto;
   height: auto;
   object-fit: contain;
 }
@@ -1121,3 +1129,4 @@ input {
     padding: 12px;
   }
 }
+
