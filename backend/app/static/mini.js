@@ -35,6 +35,19 @@ const toast = document.getElementById("miniToast");
 
 const RECENT_KEY = "miniRecentGoods";
 
+const rawBase = document.body?.dataset?.appBase || "";
+const APP_BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
+
+function withBase(path) {
+  if (!path) return APP_BASE || "";
+  if (!path.startsWith("/")) {
+    return `${APP_BASE}/${path}`;
+  }
+  return `${APP_BASE}${path}`;
+}
+
+
+
 function showScreen(name) {
   if (name === "records") {
     recordScreen.classList.add("active");
@@ -59,7 +72,7 @@ function showToast(message, tone = "info") {
 async function fetchJSON(url) {
   const res = await fetch(url);
   if (res.status === 401) {
-    window.location = "/login?next=/mini";
+    window.location = `${withBase("/login")}?next=${encodeURIComponent(withBase("/mini"))}`;
     throw new Error("Не авторизован");
   }
   if (!res.ok) {
@@ -75,7 +88,7 @@ async function postJSON(url, payload) {
     body: JSON.stringify(payload),
   });
   if (res.status === 401) {
-    window.location = "/login?next=/mini";
+    window.location = `${withBase("/login")}?next=${encodeURIComponent(withBase("/mini"))}`;
     throw new Error("Не авторизован");
   }
   if (!res.ok) {
@@ -148,7 +161,7 @@ async function loadRecords() {
     q: recordSearch.value.trim(),
   });
   try {
-    const data = await fetchJSON(`/api/mini/records?${params}`);
+    const data = await fetchJSON(`${withBase("/api/mini/records")}?${params}`);
     state.records = data.records || [];
     renderRecords();
   } catch (err) {
@@ -159,7 +172,7 @@ async function loadRecords() {
 }
 
 async function loadBranches() {
-  const data = await fetchJSON("/api/mini/branches");
+  const data = await fetchJSON(withBase("/api/mini/branches"));
   branchSelect.innerHTML = "";
   (data.branches || []).forEach((branch) => {
     const opt = document.createElement("option");
@@ -198,7 +211,7 @@ async function openRecord(record) {
   renderBasket();
   try {
     const params = new URLSearchParams({ branch_id: state.branchId });
-    const data = await fetchJSON(`/api/mini/records/${record.record_id}?${params}`);
+    const data = await fetchJSON(`${withBase("/api/mini/records")}/${record.record_id}?${params}`);
     const detail = data.record || record;
     state.selectedServiceId = data.service_id || null;
     state.storageId = data.storage_id || null;
@@ -266,7 +279,7 @@ async function runGoodsSearch() {
   }
   const params = new URLSearchParams({ branch_id: state.branchId, term });
   try {
-    const data = await fetchJSON(`/api/mini/goods/search?${params}`);
+    const data = await fetchJSON(`${withBase("/api/mini/goods/search")}?${params}`);
     renderGoods(data.items || []);
   } catch (err) {
     console.warn(err);
@@ -346,7 +359,7 @@ async function addGoodToRecord() {
       service_id: state.selectedServiceId,
       tg_user: state.tgUser,
     };
-    const data = await postJSON(`/api/mini/records/${state.selectedRecord.record_id}/goods`, payload);
+    const data = await postJSON(`${withBase("/api/mini/records")}/${state.selectedRecord.record_id}/goods`, payload);
     const added = data.added || {};
     state.sessionAdds.unshift({
       good_id: state.selectedGood.good_id,
@@ -375,7 +388,7 @@ async function undoLast() {
     return;
   }
   try {
-    await postJSON(`/api/mini/records/${state.selectedRecord.record_id}/goods/undo`, {
+    await postJSON(`${withBase("/api/mini/records")}/${state.selectedRecord.record_id}/goods/undo`, {
       branch_id: state.branchId,
       service_id: state.selectedServiceId,
       goods_transaction_id: last.goods_transaction_id,

@@ -155,6 +155,51 @@ def _record_client_name(record: dict) -> str:
     return _clean_text(record.get("client_name") or client.get("name") or client.get("phone"))
 
 
+def _record_attendance(record: dict) -> int:
+    attendance = record.get("attendance")
+    if attendance is None:
+        attendance = record.get("visit_attendance")
+    value = _to_int(attendance, 0)
+    return value if value is not None else 0
+
+
+def _record_comment(record: dict) -> str:
+    return _clean_text(record.get("comment"))
+
+
+def _record_visit_id(record: dict) -> int | None:
+    visit_id = record.get("visit_id")
+    if visit_id is None:
+        visit_id = (record.get("visit") or {}).get("id")
+    return _to_int(visit_id)
+
+
+def _find_goods_tx_id(
+    record_data: dict | list,
+    good_id: int,
+    amount: float | None,
+    storage_id: int | None = None,
+) -> int | None:
+    items = record_data if isinstance(record_data, list) else record_data.get("goods_transactions") or []
+    matches = []
+    for item in items:
+        item_good_id = _to_int(item.get("good_id") or (item.get("good") or {}).get("id"))
+        if item_good_id != good_id:
+            continue
+        item_amount = _to_float(item.get("amount"))
+        if amount is not None:
+            if item_amount is None or abs(item_amount - amount) > 1e-6:
+                continue
+        if storage_id is not None:
+            item_storage = _to_int(item.get("storage_id"))
+            if item_storage is not None and item_storage != storage_id:
+                continue
+        tx_id = _to_int(item.get("id") or item.get("goods_transaction_id"))
+        if tx_id:
+            matches.append(tx_id)
+    return max(matches) if matches else None
+
+
 def _record_status(start_dt: datetime, end_dt: datetime, now: datetime) -> str:
     if start_dt <= now <= end_dt:
         return "В процессе"
@@ -535,31 +580,28 @@ def api_branches(request: Request):
 @app.get("/api/mini/branches")
 def api_mini_branches(request: Request):
     _require_session(request)
-    client = build_client()
     branches: list[dict] = []
     try:
-        resp = client.get_companies()
-        for company in resp.get("data") or []:
-            branch_id = _to_int(company.get("id"))
-            if not branch_id:
-                continue
-            if settings.active_branch_ids and branch_id not in settings.active_branch_ids:
-                continue
-            title = _clean_text(company.get("title") or company.get("name") or branch_id)
-            branches.append({"branch_id": branch_id, "display_name": title})
-    except Exception as exc:  # noqa: BLE001
-        logging.getLogger("mini_app").warning("Failed to load companies: %s", exc)
         config = ensure_branch_names(load_group_config())
         for branch in config.get("branches", []):
             branch_id = _to_int(branch.get("branch_id"))
             if not branch_id:
                 continue
-            branches.append(
-                {
-                    "branch_id": branch_id,
-                    "display_name": branch.get("display_name", str(branch_id)),
-                }
-            )
+            display_name = branch.get("display_name", str(branch_id))
+            branches.append({"branch_id": branch_id, "display_name": display_name})
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("mini_app").warning("Failed to load branch config: %s", exc)
+        try:
+            client = build_client()
+            resp = client.get_companies()
+            for company in resp.get("data") or []:
+                branch_id = _to_int(company.get("id"))
+                if not branch_id:
+                    continue
+                title = _clean_text(company.get("title") or company.get("name") or branch_id)
+                branches.append({"branch_id": branch_id, "display_name": title})
+        except Exception as exc2:  # noqa: BLE001
+            logging.getLogger("mini_app").warning("Failed to load companies: %s", exc2)
     branches.sort(key=lambda item: (item["display_name"] or "").lower())
     return {"branches": branches}
 
@@ -706,13 +748,18 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
 
 
 @app.post("/api/mini/records/{record_id}/goods")
-def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(default={})):
+def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(default={})):  # noqa: C901
     _require_session(request)
     branch_id = _to_int(payload.get("branch_id"))
     good_id = _to_int(payload.get("good_id"))
     amount = _to_float(payload.get("amount"))
     service_id = _to_int(payload.get("service_id"))
     tg_user = payload.get("tg_user") or {}
+    attendance_override = _to_int(payload.get("attendance"))
+    comment_override = payload.get("comment")
+    good_special_number = _clean_text(payload.get("good_special_number") or "")
+    price_override = _to_float(payload.get("price"))
+    cost_override = _to_float(payload.get("cost"))
     if not branch_id:
         raise HTTPException(status_code=400, detail="branch_id is required")
     if not good_id:
@@ -724,20 +771,14 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     if not storage_id:
         raise HTTPException(status_code=400, detail="storage_id not found for branch")
 
-    if not service_id:
-        record_resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
-        services = record_resp.get("data") or {}
-        services = services.get("services") or []
-        if services:
-            service_id = _to_int(services[0].get("id") or services[0].get("service_id"))
-    if not service_id:
-        cons_resp = client.get_record_consumables(branch_id, record_id)
-        for service in cons_resp.get("data") or []:
-            service_id = _to_int(service.get("service_id"))
-            if service_id:
-                break
-    if not service_id:
-        raise HTTPException(status_code=404, detail="service_id not found for record")
+    record_resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
+    record_data = record_resp.get("data") or {}
+    visit_id = _record_visit_id(record_data)
+    if not visit_id:
+        raise HTTPException(status_code=404, detail="visit_id not found for record")
+    attendance = attendance_override if attendance_override is not None else _record_attendance(record_data)
+    comment = comment_override if comment_override is not None else record_data.get("comment")
+    comment = _clean_text(comment)
 
     good_cache_key = f"mini:good:{branch_id}:{good_id}"
     good_data = _MINI_CACHE.get(good_cache_key)
@@ -745,42 +786,27 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         good_resp = client.get_good(branch_id, good_id)
         good_data = good_resp.get("data") or {}
         _MINI_CACHE.set(good_cache_key, good_data, _MINI_GOOD_TTL)
-    price = _guess_price(good_data)
+    price = price_override if price_override is not None else _guess_price(good_data)
+    cost = cost_override if cost_override is not None else price
+    tx_amount = -abs(amount)
 
-    consumables_resp = client.get_record_consumables(branch_id, record_id)
-    existing: list[dict] = []
-    for service in consumables_resp.get("data") or []:
-        if _to_int(service.get("service_id")) != service_id:
-            continue
-        for item in service.get("consumables") or []:
-            item_good_id = _to_int(item.get("good_id") or (item.get("good") or {}).get("id"))
-            if not item_good_id:
-                continue
-            existing.append(
-                {
-                    "goods_transaction_id": _to_int(item.get("goods_transaction_id"), 0) or 0,
-                    "record_id": record_id,
-                    "service_id": service_id,
-                    "storage_id": _to_int(item.get("storage_id")) or storage_id,
-                    "good_id": item_good_id,
-                    "price": _to_float(item.get("price")) or 0,
-                    "amount": _to_float(item.get("amount")) or 0,
-                }
-            )
-        break
-
-    new_item = {
-        "goods_transaction_id": 0,
-        "record_id": record_id,
-        "service_id": service_id,
-        "storage_id": storage_id,
-        "good_id": good_id,
-        "price": price,
-        "amount": amount,
+    visit_payload = {
+        "attendance": attendance,
+        "comment": comment,
+        "services": [],
+        "goods_transactions": [
+            {
+                "good_id": good_id,
+                "storage_id": storage_id,
+                "price": price,
+                "cost": cost,
+                "amount": tx_amount,
+                "good_special_number": good_special_number,
+            }
+        ],
     }
-    payload_items = existing + [new_item]
     try:
-        resp = client.set_record_consumables(branch_id, record_id, service_id, payload_items)
+        resp = client.update_visit(visit_id, record_id, visit_payload)
     except Exception as exc:  # noqa: BLE001
         _audit_mini(
             "add",
@@ -797,16 +823,13 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         )
         raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
 
-    added_tx = None
-    for service in resp.get("data") or []:
-        if _to_int(service.get("service_id")) != service_id:
-            continue
-        for item in service.get("consumables") or []:
-            if _to_int(item.get("good_id")) == good_id and _to_float(item.get("amount")) == amount:
-                tx_id = _to_int(item.get("goods_transaction_id"))
-                if tx_id:
-                    added_tx = tx_id
-        break
+    added_tx = _find_goods_tx_id(resp.get("data") or {}, good_id, tx_amount, storage_id)
+    if not added_tx:
+        try:
+            latest = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
+            added_tx = _find_goods_tx_id(latest.get("data") or {}, good_id, tx_amount, storage_id)
+        except Exception:  # noqa: BLE001
+            added_tx = None
 
     _audit_mini(
         "add",
@@ -836,51 +859,41 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
 def api_mini_undo_good(request: Request, record_id: int, payload: dict = Body(default={})):
     _require_session(request)
     branch_id = _to_int(payload.get("branch_id"))
-    service_id = _to_int(payload.get("service_id"))
     goods_transaction_id = _to_int(payload.get("goods_transaction_id"))
+    service_id = _to_int(payload.get("service_id"))
     tg_user = payload.get("tg_user") or {}
-    if not branch_id or not service_id or not goods_transaction_id:
-        raise HTTPException(status_code=400, detail="branch_id, service_id, goods_transaction_id are required")
+    if not branch_id or not goods_transaction_id:
+        raise HTTPException(status_code=400, detail="branch_id and goods_transaction_id are required")
     client = build_client()
-    storage_id_default = _get_storage_id(client, branch_id)
 
-    consumables_resp = client.get_record_consumables(branch_id, record_id)
-    updated: list[dict] = []
+    record_resp = client.get_record(branch_id, record_id, include_consumables=0, include_finance=0)
+    record_data = record_resp.get("data") or {}
+    visit_id = _record_visit_id(record_data)
+    if not visit_id:
+        raise HTTPException(status_code=404, detail="visit_id not found for record")
+
     removed = None
-    for service in consumables_resp.get("data") or []:
-        if _to_int(service.get("service_id")) != service_id:
+    for item in record_data.get("goods_transactions") or []:
+        item_tx = _to_int(item.get("id") or item.get("goods_transaction_id"))
+        if item_tx != goods_transaction_id:
             continue
-        for item in service.get("consumables") or []:
-            item_tx = _to_int(item.get("goods_transaction_id"))
-            item_good_id = _to_int(item.get("good_id") or (item.get("good") or {}).get("id"))
-            if item_tx == goods_transaction_id:
-                removed = {
-                    "good_id": item_good_id,
-                    "amount": _to_float(item.get("amount")),
-                    "price": _to_float(item.get("price")),
-                    "storage_id": _to_int(item.get("storage_id")) or storage_id_default,
-                }
-                continue
-            if not item_good_id:
-                continue
-            updated.append(
-                {
-                    "goods_transaction_id": item_tx or 0,
-                    "record_id": record_id,
-                    "service_id": service_id,
-                    "storage_id": _to_int(item.get("storage_id")) or storage_id_default,
-                    "good_id": item_good_id,
-                    "price": _to_float(item.get("price")) or 0,
-                    "amount": _to_float(item.get("amount")) or 0,
-                }
-            )
+        removed = {
+            "good_id": _to_int(item.get("good_id") or (item.get("good") or {}).get("id")),
+            "amount": _to_float(item.get("amount")),
+            "price": _to_float(item.get("price") or item.get("cost") or item.get("cost_per_unit")),
+            "storage_id": _to_int(item.get("storage_id")),
+        }
         break
 
-    if removed is None:
-        raise HTTPException(status_code=404, detail="Позиция не найдена")
+    visit_payload = {
+        "attendance": _record_attendance(record_data),
+        "comment": _record_comment(record_data),
+        "services": [],
+        "deleted_transaction_ids": [goods_transaction_id],
+    }
 
     try:
-        client.set_record_consumables(branch_id, record_id, service_id, updated)
+        client.update_visit(visit_id, record_id, visit_payload)
     except Exception as exc:  # noqa: BLE001
         _audit_mini(
             "undo",

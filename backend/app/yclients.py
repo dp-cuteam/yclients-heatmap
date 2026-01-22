@@ -138,6 +138,13 @@ class YClientsClient:
     def get_good(self, company_id: int, good_id: int) -> dict[str, Any]:
         return self._request("GET", f"/api/v1/goods/{company_id}/{good_id}")
 
+    def update_visit(self, visit_id: int, record_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request(
+            "PUT",
+            f"/api/v1/visits/{visit_id}/{record_id}",
+            json_body=payload,
+        )
+
     def list_goods(self, company_id: int, page: int = 1, count: int = 200) -> dict[str, Any]:
         return self._request(
             "GET",

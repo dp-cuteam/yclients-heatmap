@@ -218,8 +218,18 @@ def run_diagnostics(branch_id: int | None = None, day: str | None = None, staff_
 
     # Test 2: Branches + config file
     branch_list = []
-    if auth_resp["json"] and isinstance(auth_resp["json"].get("data"), list):
-        for item in auth_resp["json"]["data"][:10]:
+    cfg_path = settings.group_resolved_path if settings.group_resolved_path.exists() else settings.group_config_path
+    try:
+        raw = cfg_path.read_text(encoding="utf-8-sig")
+        data = json.loads(raw)
+        for branch in data.get("branches", []):
+            branch_id = branch.get("branch_id")
+            title = branch.get("display_name") or branch_id
+            branch_list.append({"id": branch_id, "title": title})
+    except Exception:  # noqa: BLE001
+        branch_list = []
+    if not branch_list and auth_resp["json"] and isinstance(auth_resp["json"].get("data"), list):
+        for item in auth_resp["json"]["data"]:
             branch_list.append({"id": item.get("id"), "title": item.get("title")})
     tests.append(
         {
@@ -230,7 +240,7 @@ def run_diagnostics(branch_id: int | None = None, day: str | None = None, staff_
             "message": "Получен список филиалов"
             if auth_resp["status_code"] == 200
             else _status_message(auth_resp["status_code"]),
-            "details": {"branches_sample": branch_list},
+            "details": {"branches_sample": branch_list[:10]},
         }
     )
 

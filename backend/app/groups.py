@@ -24,11 +24,6 @@ def load_group_config() -> dict:
         data = _load_json(settings.group_resolved_path)
     else:
         data = _load_json(settings.group_config_path)
-    if settings.active_branch_ids:
-        allowed = set(settings.active_branch_ids)
-        data["branches"] = [
-            b for b in data.get("branches", []) if int(b.get("branch_id", 0)) in allowed
-        ]
     return data
 
 

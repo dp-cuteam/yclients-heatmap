@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
-  <body class="mini-body">
+  <body class="mini-body" data-app-base="{{ request.scope.get('root_path', '') }}">
     <div class="mini-shell">
       <header class="mini-header">
         <div>
@@ -20,7 +20,7 @@
       <section id="screenRecords" class="mini-screen active">
         <div class="mini-card">
           <div class="field">
-            <label>Филиал</label>
+            <label>Филиалы коворкинга</label>
             <select id="miniBranchSelect"></select>
           </div>
           <div class="mini-toggle" role="group" aria-label="Фильтр времени">
@@ -85,3 +85,4 @@
     <script src="/static/mini.js"></script>
   </body>
 </html>
+
