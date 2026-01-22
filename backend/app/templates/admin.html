@@ -106,18 +106,6 @@
         <div class="admin-divider"></div>
         <section class="audit-panel">
           <h2>Товары (для mini-app)</h2>
-          <div class="admin-status">
-            <div class="status-card">
-              <div class="status-label">Статус</div>
-              <div id="goodsStatus" class="status-value">?</div>
-              <div id="goodsError" class="status-meta"></div>
-            </div>
-            <div class="status-card">
-              <div class="status-label">Последняя синхронизация</div>
-              <div id="goodsLastSync" class="status-value">?</div>
-              <div class="status-meta" id="goodsCacheCount">?</div>
-            </div>
-          </div>
           <div class="admin-actions">
             <div class="field" style="min-width: 220px;">
               <label>Филиалы коворкинга</label>
@@ -128,8 +116,8 @@
               <input id="goodsTerm" type="text" placeholder="Название / Артикул" />
             </div>
             <button id="goodsCheck" class="ghost">Проверить API</button>
-            <button id="goodsSync" class="primary">Синхронизировать кэш</button>
           </div>
+          <div class="status-meta">Поиск идёт напрямую через API YCLIENTS, без серверного кэша.</div>
           <pre id="goodsOutput" class="status-log"></pre>
         </section>
 

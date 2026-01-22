@@ -722,19 +722,8 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
     _require_session(request)
     term = (term or "").strip()
     if len(term) < 2:
-        return {"items": []}
-    cache_key = f"mini:goods:{branch_id}:{term.lower()}"
-    cached = _MINI_CACHE.get(cache_key)
-    if cached is not None:
-        return {"items": cached, "source": "memory"}
-
+        return {"items": [], "source": "api"}
     limit_val = max(1, min(int(limit or 30), 50))
-    cache_status = _get_goods_cache_status(branch_id)
-    if (cache_status.get("total_count") or 0) > 0:
-        items = _goods_cache_search(branch_id, term, limit_val)
-        _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
-        return {"items": items, "source": "cache"}
-
     client = build_client()
     resp = client.search_goods(branch_id, term, count=limit_val)
     items = []
@@ -744,8 +733,6 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
             continue
         items.append(item)
     items = _sort_goods(items, term)[:limit_val]
-    _goods_cache_upsert(branch_id, items)
-    _MINI_CACHE.set(cache_key, items, _MINI_SEARCH_TTL)
     return {"items": items, "source": "api"}
 
 
@@ -1457,13 +1444,11 @@ def api_admin_goods_check(request: Request, payload: dict = Body(default={})):
             "status": "ok",
             "items": items,
             "count": len(resp.get("data") or []),
-            "cache_count": _goods_cache_count(branch_id),
         }
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "error",
             "error": str(exc),
-            "cache_count": _goods_cache_count(branch_id),
         }
 
 @app.post("/api/admin/diagnostics/run")

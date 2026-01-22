@@ -18,12 +18,7 @@ const paletteInputs = document.querySelectorAll('input[name="heatmapPalette"]');
 const goodsBranch = document.getElementById("goodsBranch");
 const goodsTerm = document.getElementById("goodsTerm");
 const goodsCheckBtn = document.getElementById("goodsCheck");
-const goodsSyncBtn = document.getElementById("goodsSync");
 const goodsOutput = document.getElementById("goodsOutput");
-const goodsStatus = document.getElementById("goodsStatus");
-const goodsLastSync = document.getElementById("goodsLastSync");
-const goodsCacheCount = document.getElementById("goodsCacheCount");
-const goodsError = document.getElementById("goodsError");
 
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options);
@@ -260,32 +255,6 @@ async function loadGoodsBranches() {
   }
 }
 
-function formatGoodsStatus(status) {
-  if (!status) return "—";
-  const map = {
-    running: "Выполняется",
-    success: "Успешно",
-    failed: "Ошибка",
-    none: "Нет данных",
-  };
-  return map[status] || status;
-}
-
-async function refreshGoodsStatus() {
-  if (!goodsBranch || !goodsBranch.value) return;
-  try {
-    const data = await fetchJSON(`/api/admin/goods/status?branch_id=${goodsBranch.value}`);
-    goodsStatus.textContent = formatGoodsStatus(data.status);
-    goodsLastSync.textContent = data.last_sync ? new Date(data.last_sync).toLocaleString("ru-RU") : "—";
-    const count = data.total_count ?? "—";
-    goodsCacheCount.textContent = `Позиций: ${count}`;
-    goodsError.textContent = data.error ? String(data.error) : "";
-  } catch (err) {
-    goodsStatus.textContent = "Ошибка";
-    goodsError.textContent = err.message || "—";
-  }
-}
-
 async function checkGoodsApi() {
   if (!goodsCheckBtn || !goodsBranch.value) return;
   goodsCheckBtn.disabled = true;
@@ -308,32 +277,8 @@ async function checkGoodsApi() {
   }
 }
 
-async function syncGoods() {
-  if (!goodsSyncBtn || !goodsBranch.value) return;
-  goodsSyncBtn.disabled = true;
-  goodsOutput.textContent = "Запущена синхронизация…";
-  try {
-    await fetchJSON("/api/admin/goods/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branch_id: goodsBranch.value }),
-    });
-  } catch (err) {
-    goodsOutput.textContent = err.message || "Ошибка";
-  } finally {
-    goodsSyncBtn.disabled = false;
-    await refreshGoodsStatus();
-  }
-}
-
-if (goodsBranch) {
-  goodsBranch.addEventListener("change", refreshGoodsStatus);
-}
 if (goodsCheckBtn) {
   goodsCheckBtn.addEventListener("click", checkGoodsApi);
 }
-if (goodsSyncBtn) {
-  goodsSyncBtn.addEventListener("click", syncGoods);
-}
 
-loadGoodsBranches().then(refreshGoodsStatus);
+loadGoodsBranches();
