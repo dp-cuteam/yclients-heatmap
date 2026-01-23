@@ -1291,16 +1291,16 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
     db_exists = True if source_label == "Postgres" else settings.db_path.exists()
     db_path = "DATABASE_URL" if source_label == "Postgres" else str(settings.db_path)
     if effective_start > last_day:
-    return {
-        "branch_id": branch_id,
-        "month": month,
-        "source": source_label,
-        "db_path": db_path,
-        "db_exists": db_exists,
-        "last_updated": None,
-        "total_rows": 0,
-        "group_counts": [],
-    }
+        return {
+            "branch_id": branch_id,
+            "month": month,
+            "source": source_label,
+            "db_path": db_path,
+            "db_exists": db_exists,
+            "last_updated": None,
+            "total_rows": 0,
+            "group_counts": [],
+        }
     config = load_group_config()
     branch = next((b for b in config.get("branches", []) if int(b["branch_id"]) == branch_id), None)
     if not branch:
