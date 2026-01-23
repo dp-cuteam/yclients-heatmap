@@ -34,6 +34,9 @@ const basketList = document.getElementById("basketList");
 const undoGoodBtn = document.getElementById("undoGoodBtn");
 const toast = document.getElementById("miniToast");
 const sendModeButtons = document.querySelectorAll("#miniSendMode .mini-toggle-btn");
+const miniLogOutput = document.getElementById("miniLogOutput");
+const miniLogCopy = document.getElementById("miniLogCopy");
+const miniLogClear = document.getElementById("miniLogClear");
 
 const RECENT_KEY = "miniRecentGoods";
 const SEND_MODE_KEY = "miniSendMode";
@@ -70,6 +73,16 @@ function showToast(message, tone = "info") {
   showToast._timer = setTimeout(() => {
     toast.style.opacity = "0";
   }, 2500);
+}
+
+function appendLog(entry) {
+  if (!miniLogOutput) return;
+  const line = typeof entry === "string" ? entry : JSON.stringify(entry, null, 2);
+  if (miniLogOutput.textContent.trim() === "—") {
+    miniLogOutput.textContent = line;
+  } else {
+    miniLogOutput.textContent = `${miniLogOutput.textContent}\n\n${line}`;
+  }
 }
 
 async function fetchJSON(url) {
@@ -373,7 +386,9 @@ async function addGoodToRecord() {
       tg_user: state.tgUser,
       mode: state.sendMode || "goods_only",
     };
+    appendLog({ kind: "request", at: new Date().toISOString(), path: "/api/mini/records/:id/goods", payload });
     const data = await postJSON(`${withBase("/api/mini/records")}/${state.selectedRecord.record_id}/goods`, payload);
+    appendLog({ kind: "response", at: new Date().toISOString(), path: "/api/mini/records/:id/goods", response: data });
     const added = data.added || {};
     state.sessionAdds.unshift({
       good_id: state.selectedGood.good_id,
@@ -389,6 +404,7 @@ async function addGoodToRecord() {
     showToast("Товар добавлен", "ok");
   } catch (err) {
     console.warn(err);
+    appendLog({ kind: "error", at: new Date().toISOString(), path: "/api/mini/records/:id/goods", error: err.message || String(err) });
     showToast(err.message || "Ошибка добавления", "err");
   } finally {
     addGoodBtn.disabled = false;
@@ -469,6 +485,26 @@ goodQuick.addEventListener("click", (evt) => {
 
 addGoodBtn.addEventListener("click", addGoodToRecord);
 undoGoodBtn.addEventListener("click", undoLast);
+if (miniLogCopy) {
+  miniLogCopy.addEventListener("click", async () => {
+    if (!miniLogOutput) return;
+    const text = miniLogOutput.textContent || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Лог скопирован", "ok");
+    } catch (err) {
+      console.warn(err);
+      showToast("Не удалось скопировать", "warn");
+    }
+  });
+}
+
+if (miniLogClear) {
+  miniLogClear.addEventListener("click", () => {
+    if (!miniLogOutput) return;
+    miniLogOutput.textContent = "—";
+  });
+}
 
 async function init() {
   initTelegram();

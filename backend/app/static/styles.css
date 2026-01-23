@@ -1263,6 +1263,22 @@ input {
   background: #8f2d15;
 }
 
+.mini-log-output {
+  background: #12100e;
+  color: #f4f0ea;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 12px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.mini-log-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
 @media (max-width: 600px) {
   .mini-shell {
     padding: 16px 14px 40px;
