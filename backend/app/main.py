@@ -840,22 +840,22 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     cost = cost_override if cost_override is not None else price
     tx_amount = -abs(amount)
 
+    existing_goods = list(record_data.get("goods_transactions") or [])
+    existing_goods.append(
+        {
+            "good_id": good_id,
+            "storage_id": storage_id,
+            "price": price,
+            "cost": cost,
+            "amount": tx_amount,
+            "good_special_number": good_special_number,
+        }
+    )
     visit_payload = {
         "attendance": attendance,
         "comment": comment,
         "services": [],
-        "new_transactions": [
-            {
-                "good_id": good_id,
-                "storage_id": storage_id,
-                "cost": cost,
-                "cost_per_unit": price,
-                "discount": 0,
-                "amount": tx_amount,
-                "operation_unit_type": 1,
-                "good_special_number": good_special_number,
-            }
-        ],
+        "goods_transactions": existing_goods,
     }
     try:
         resp = client.update_visit(visit_id, record_id, visit_payload)
