@@ -45,6 +45,24 @@
 
         <div class="mini-card mini-record-card" id="miniRecordCard"></div>
 
+        <div class="mini-card mini-mode-card">
+          <div class="field">
+            <label>Режим добавления (эксперимент)</label>
+            <div class="mini-toggle mini-send" id="miniSendMode">
+              <button class="mini-toggle-btn" data-send="goods_only" type="button">
+                goods_transactions (1)
+              </button>
+              <button class="mini-toggle-btn" data-send="goods_merge" type="button">
+                goods_transactions (merge)
+              </button>
+              <button class="mini-toggle-btn" data-send="new_transactions" type="button">
+                new_transactions
+              </button>
+            </div>
+            <div class="mini-hint">Меняет формат payload. Для тестов на «не страшных» записях.</div>
+          </div>
+        </div>
+
         <div class="mini-card">
           <div class="field">
             <label>Поиск товара</label>

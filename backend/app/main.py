@@ -810,6 +810,7 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     good_special_number = _clean_text(payload.get("good_special_number") or "")
     price_override = _to_float(payload.get("price"))
     cost_override = _to_float(payload.get("cost"))
+    mode = _clean_text(payload.get("mode") or "goods_only").lower()
     if not branch_id:
         raise HTTPException(status_code=400, detail="branch_id is required")
     if not good_id:
@@ -840,23 +841,38 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     cost = cost_override if cost_override is not None else price
     tx_amount = -abs(amount)
 
-    existing_goods = list(record_data.get("goods_transactions") or [])
-    existing_goods.append(
-        {
-            "good_id": good_id,
-            "storage_id": storage_id,
-            "price": price,
-            "cost": cost,
-            "amount": tx_amount,
-            "good_special_number": good_special_number,
-        }
-    )
+    item_goods = {
+        "good_id": good_id,
+        "storage_id": storage_id,
+        "price": price,
+        "cost": cost,
+        "amount": tx_amount,
+        "good_special_number": good_special_number,
+    }
     visit_payload = {
         "attendance": attendance,
         "comment": comment,
         "services": [],
-        "goods_transactions": existing_goods,
     }
+    if mode == "new_transactions":
+        visit_payload["new_transactions"] = [
+            {
+                "good_id": good_id,
+                "storage_id": storage_id,
+                "amount": tx_amount,
+                "cost_per_unit": price,
+                "discount": 0,
+                "cost": cost,
+                "operation_unit_type": 1,
+                "good_special_number": good_special_number,
+            }
+        ]
+    elif mode == "goods_merge":
+        existing_goods = list(record_data.get("goods_transactions") or [])
+        existing_goods.append(item_goods)
+        visit_payload["goods_transactions"] = existing_goods
+    else:
+        visit_payload["goods_transactions"] = [item_goods]
     try:
         resp = client.update_visit(visit_id, record_id, visit_payload)
     except Exception as exc:  # noqa: BLE001

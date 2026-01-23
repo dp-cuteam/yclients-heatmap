@@ -1184,6 +1184,16 @@ input {
   cursor: pointer;
 }
 
+.mini-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mini-mode-card .mini-toggle {
+  margin: 8px 0 6px;
+}
+
 .mini-basket {
   margin-top: 12px;
 }
