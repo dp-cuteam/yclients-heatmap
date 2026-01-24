@@ -810,7 +810,7 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     good_special_number = _clean_text(payload.get("good_special_number") or "")
     price_override = _to_float(payload.get("price"))
     cost_override = _to_float(payload.get("cost"))
-    mode = _clean_text(payload.get("mode") or "goods_only").lower()
+    mode = _clean_text(payload.get("mode") or "new_transactions").lower()
     if not branch_id:
         raise HTTPException(status_code=400, detail="branch_id is required")
     if not good_id:
