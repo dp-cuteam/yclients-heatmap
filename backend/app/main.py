@@ -1099,6 +1099,41 @@ def api_historical_import(request: Request, background: BackgroundTasks, payload
     background.add_task(hist_run_import, run_id, mode)
     return {"status": "started", "run_id": run_id}
 
+
+@app.get("/api/admin/yclients-debug-log")
+def api_yclients_debug_log(request: Request, lines: int = 50):
+    """Get last N lines from YCLIENTS API debug log."""
+    require_admin(request)
+    log_path = settings.data_dir / "yclients_api_debug.log"
+    if not log_path.exists():
+        return {"lines": [], "message": "Log file not found. No API calls logged yet."}
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+        last_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        entries = []
+        for line in last_lines:
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    entries.append({"raw": line})
+        return {"lines": entries, "total": len(all_lines)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+@app.delete("/api/admin/yclients-debug-log")
+def api_clear_yclients_debug_log(request: Request):
+    """Clear YCLIENTS API debug log."""
+    require_admin(request)
+    log_path = settings.data_dir / "yclients_api_debug.log"
+    if log_path.exists():
+        log_path.unlink()
+    return {"status": "cleared"}
+
+
 @app.get("/api/branches/{branch_id}/groups")
 def api_groups(branch_id: int, request: Request):
     if not request.session.get("user"):

@@ -1,12 +1,48 @@
 from __future__ import annotations
 
+import json
+import logging
 import time
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import requests
 
 from .config import settings
+
+_logger = logging.getLogger("yclients_api")
+
+
+def _log_api_call(
+    method: str,
+    url: str,
+    params: dict | None,
+    json_body: dict | None,
+    status_code: int,
+    response_data: Any,
+    error: str | None = None,
+) -> None:
+    """Log API call to file for debugging."""
+    log_path = settings.data_dir / "yclients_api_debug.log"
+    entry = {
+        "ts": datetime.utcnow().isoformat(),
+        "method": method,
+        "url": url,
+        "params": params,
+        "request_body": json_body,
+        "status_code": status_code,
+        "response": response_data,
+        "error": error,
+    }
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str))
+            f.write("\n")
+    except Exception:  # noqa: BLE001
+        _logger.warning("Failed to write API debug log")
 
 
 @dataclass
@@ -46,12 +82,19 @@ class YClientsClient:
                     json=json_body,
                     timeout=self.timeout,
                 )
+                data = resp.json() if resp.text else {}
+                
+                # Log all PUT/POST requests to visits for debugging
+                if method in ("PUT", "POST") and "/visits/" in path:
+                    _log_api_call(method, url, params, json_body, resp.status_code, data)
+                
                 if resp.status_code >= 500:
                     raise RuntimeError(f"Server error {resp.status_code}")
-                data = resp.json()
                 if data.get("success") is False:
+                    _log_api_call(method, url, params, json_body, resp.status_code, data, error="success=false")
                     raise RuntimeError(data.get("meta") or data)
                 if resp.status_code >= 400:
+                    _log_api_call(method, url, params, json_body, resp.status_code, data, error=f"status={resp.status_code}")
                     raise RuntimeError(data.get("meta") or data)
                 return data
             except Exception as exc:  # noqa: BLE001
