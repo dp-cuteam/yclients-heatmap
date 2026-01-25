@@ -175,6 +175,18 @@ def _record_visit_id(record: dict) -> int | None:
     return _to_int(visit_id)
 
 
+def _record_document_id(record: dict) -> int | None:
+    """Get document_id (type_id=7 is 'Визит') from record for goods transactions."""
+    documents = record.get("documents") or []
+    for doc in documents:
+        if _to_int(doc.get("type_id")) == 7:  # type_id=7 is "Визит"
+            return _to_int(doc.get("id"))
+    # Fallback: return first document if any
+    if documents:
+        return _to_int(documents[0].get("id"))
+    return None
+
+
 def _find_goods_tx_id(
     record_data: dict | list,
     good_id: int,
@@ -810,7 +822,7 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     good_special_number = _clean_text(payload.get("good_special_number") or "")
     price_override = _to_float(payload.get("price"))
     cost_override = _to_float(payload.get("cost"))
-    mode = _clean_text(payload.get("mode") or "new_transactions").lower()
+    mode = _clean_text(payload.get("mode") or "storage_transaction").lower()
     if not branch_id:
         raise HTTPException(status_code=400, detail="branch_id is required")
     if not good_id:
@@ -849,6 +861,72 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         "amount": tx_amount,
         "good_special_number": good_special_number,
     }
+    
+    # Use storage_transaction mode (correct API) by default
+    if mode == "storage_transaction":
+        # Get document_id for the goods transaction API
+        document_id = _record_document_id(record_data)
+        if not document_id:
+            raise HTTPException(status_code=400, detail="document_id not found for record; ensure the record has a visit document")
+        
+        # Get staff_id and client_id from record
+        staff_id = _to_int(record_data.get("staff_id") or (record_data.get("staff") or {}).get("id"))
+        client_id = _to_int(record_data.get("client_id") or (record_data.get("client") or {}).get("id"))
+        
+        try:
+            resp = client.create_goods_transaction(
+                company_id=branch_id,
+                document_id=document_id,
+                good_id=good_id,
+                storage_id=storage_id,
+                amount=abs(amount),  # positive amount for sale
+                cost_per_unit=price,
+                cost=cost * abs(amount),  # total cost
+                discount=0,
+                operation_unit_type=1,  # 1 = sale
+                master_id=staff_id,
+                client_id=client_id,
+                good_special_number=good_special_number,
+            )
+            added_tx = _to_int((resp.get("data") or {}).get("id"))
+            _audit_mini(
+                "add",
+                branch_id,
+                record_id,
+                service_id=service_id,
+                good_id=good_id,
+                amount=amount,
+                price=price,
+                storage_id=storage_id,
+                tg_user=tg_user,
+                status="ok",
+            )
+            return {
+                "status": "ok",
+                "added": {
+                    "good_id": good_id,
+                    "amount": amount,
+                    "price": price,
+                    "goods_transaction_id": added_tx,
+                },
+            }
+        except Exception as exc:  # noqa: BLE001
+            _audit_mini(
+                "add",
+                branch_id,
+                record_id,
+                service_id=service_id,
+                good_id=good_id,
+                amount=amount,
+                price=price,
+                storage_id=storage_id,
+                tg_user=tg_user,
+                status="error",
+                error=str(exc),
+            )
+            raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
+
+    # Legacy modes (kept for backward compatibility but they don't work)
     visit_payload = {
         "attendance": attendance,
         "comment": comment,

@@ -84,8 +84,8 @@ class YClientsClient:
                 )
                 data = resp.json() if resp.text else {}
                 
-                # Log all PUT/POST requests to visits for debugging
-                if method in ("PUT", "POST") and "/visits/" in path:
+                # Log all PUT/POST requests to visits and goods_transactions for debugging
+                if method in ("PUT", "POST") and ("/visits/" in path or "/goods_transactions/" in path):
                     _log_api_call(method, url, params, json_body, resp.status_code, data)
                 
                 if resp.status_code >= 500:
@@ -193,6 +193,49 @@ class YClientsClient:
             "GET",
             f"/api/v1/goods/{company_id}",
             params={"page": page, "count": count},
+        )
+
+    def create_goods_transaction(
+        self,
+        company_id: int,
+        document_id: int,
+        good_id: int,
+        storage_id: int,
+        amount: float,
+        cost_per_unit: float,
+        cost: float,
+        discount: float = 0,
+        operation_unit_type: int = 1,
+        master_id: int | None = None,
+        client_id: int | None = None,
+        comment: str = "",
+        good_special_number: str = "",
+    ) -> dict[str, Any]:
+        """Create a goods transaction (sell item to client).
+        
+        operation_unit_type: 1 = for sale, 2 = for write-off
+        """
+        payload = {
+            "document_id": document_id,
+            "good_id": good_id,
+            "storage_id": storage_id,
+            "amount": amount,
+            "cost_per_unit": cost_per_unit,
+            "discount": discount,
+            "cost": cost,
+            "operation_unit_type": operation_unit_type,
+            "comment": comment,
+        }
+        if good_special_number:
+            payload["good_special_number"] = good_special_number
+        if master_id:
+            payload["master_id"] = master_id
+        if client_id:
+            payload["client_id"] = client_id
+        return self._request(
+            "POST",
+            f"/api/v1/storage_operations/goods_transactions/{company_id}",
+            json_body=payload,
         )
 
     def list_storages(self, company_id: int) -> dict[str, Any]:
