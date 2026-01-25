@@ -7,7 +7,7 @@
   storageId: null,
   selectedGood: null,
   sessionAdds: [],
-  sendMode: "goods_only",
+  sendMode: "storage_transaction",
   tgUser: null,
 };
 
@@ -509,7 +509,7 @@ if (miniLogClear) {
 async function init() {
   initTelegram();
   setMode(localStorage.getItem("miniMode") || "now");
-  setSendMode(localStorage.getItem(SEND_MODE_KEY) || "goods_only");
+  setSendMode(localStorage.getItem(SEND_MODE_KEY) || "storage_transaction");
   await loadBranches();
   await loadRecords();
   renderBasket();
