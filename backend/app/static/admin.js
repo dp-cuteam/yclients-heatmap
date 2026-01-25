@@ -15,10 +15,6 @@ const histReimportBtn = document.getElementById("histReimport");
 const histListFilesBtn = document.getElementById("histListFiles");
 const histFiles = document.getElementById("histFiles");
 const paletteInputs = document.querySelectorAll('input[name="heatmapPalette"]');
-const goodsBranch = document.getElementById("goodsBranch");
-const goodsTerm = document.getElementById("goodsTerm");
-const goodsCheckBtn = document.getElementById("goodsCheck");
-const goodsOutput = document.getElementById("goodsOutput");
 const cuteamDbStatus = document.getElementById("cuteamDbStatus");
 const cuteamDbMeta = document.getElementById("cuteamDbMeta");
 const cuteamRange = document.getElementById("cuteamRange");
@@ -255,50 +251,6 @@ paletteInputs.forEach((input) => {
 
 loadPaletteSetting();
 
-async function loadGoodsBranches() {
-  if (!goodsBranch) return;
-  goodsBranch.innerHTML = "";
-  try {
-    const data = await fetchJSON("/api/mini/branches");
-    (data.branches || []).forEach((b) => {
-      const opt = document.createElement("option");
-      opt.value = b.branch_id;
-      opt.textContent = b.display_name;
-      goodsBranch.appendChild(opt);
-    });
-  } catch (err) {
-    console.warn("Failed to load goods branches", err);
-  }
-  if (!goodsBranch.value && goodsBranch.options.length) {
-    goodsBranch.value = goodsBranch.options[0].value;
-  }
-}
-
-async function checkGoodsApi() {
-  if (!goodsCheckBtn || !goodsBranch.value) return;
-  goodsCheckBtn.disabled = true;
-  goodsOutput.textContent = "";
-  try {
-    const payload = {
-      branch_id: goodsBranch.value,
-      term: goodsTerm.value || "",
-    };
-    const data = await fetchJSON("/api/admin/goods/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    goodsOutput.textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    goodsOutput.textContent = err.message || "Ошибка";
-  } finally {
-    goodsCheckBtn.disabled = false;
-  }
-}
-
-if (goodsCheckBtn) {
-  goodsCheckBtn.addEventListener("click", checkGoodsApi);
-}
 
 async function refreshCuteamStatus() {
   if (!cuteamDbStatus) return;
@@ -413,4 +365,3 @@ if (cuteamDbStatus) {
   setInterval(refreshCuteamStatus, 10000);
 }
 
-loadGoodsBranches();

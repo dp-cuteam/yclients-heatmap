@@ -201,6 +201,7 @@
           <p class="subtitle">Данные из Google Sheet · дни/недели</p>
         </div>
         <div class="actions">
+          <a class="ghost" href="/cuteam">Показатели</a>
           <a class="ghost" href="/">Теплокарта</a>
           <a class="ghost" href="/historical">Исторические</a>
           <a class="ghost" href="/summary">Свод</a>
@@ -327,6 +328,12 @@
         const data = await fetchJSON(`/api/cuteam/months?branch_code=${encodeURIComponent(state.branchCode)}`);
         const months = data.months || [];
         monthSelect.innerHTML = "";
+        if (months.length === 0) {
+          state.month = null;
+          monthSelect.disabled = true;
+          return;
+        }
+        monthSelect.disabled = false;
         months.forEach((month) => {
           const opt = document.createElement("option");
           opt.value = month;
@@ -569,7 +576,12 @@
       }
 
       async function loadData() {
-        if (!state.branchCode || !state.month) return;
+        if (!state.branchCode) return;
+        if (!state.month) {
+          tableContainer.innerHTML =
+            '<div class="empty-state">Нет данных для выбранного филиала. Проверьте синхронизацию в админке.</div>';
+          return;
+        }
         tableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
         try {
           const data = await fetchJSON(

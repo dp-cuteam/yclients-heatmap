@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, Body
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, PlainTextResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -19,12 +19,6 @@ from starlette.middleware.sessions import SessionMiddleware
 from .auth import authenticate, require_admin
 from .config import settings
 from .db import get_conn, init_db, init_historical_db, db_source_label, upsert_sql
-from .diagnostics import (
-    run_diagnostics,
-    _latest_log_info,
-    run_support_packet,
-    latest_support_packet_info,
-)
 from .etl import run_full_2025, run_daily
 from .groups import load_group_config, ensure_branch_names
 from .historical import (
@@ -604,12 +598,6 @@ def mini_app_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login?next=/mini", status_code=302)
     return templates.TemplateResponse("mini.html", {"request": request})
-
-@app.get("/admin/diagnostics", response_class=HTMLResponse)
-def diagnostics_page(request: Request):
-    if not request.session.get("user"):
-        return RedirectResponse("/login", status_code=302)
-    return RedirectResponse("/admin", status_code=302)
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -1644,124 +1632,6 @@ def api_full_last(request: Request):
         branch["last_full"] = (record or {}).get("finished_at") or (record or {}).get("started_at")
     return {"branches": branches}
 
-
-@app.get("/api/admin/goods/status")
-def api_admin_goods_status(request: Request, branch_id: int):
-    require_admin(request)
-    return _get_goods_cache_status(branch_id)
-
-
-@app.post("/api/admin/goods/sync")
-def api_admin_goods_sync(request: Request, background: BackgroundTasks, payload: dict = Body(default={})):
-    require_admin(request)
-    branch_id = _to_int(payload.get("branch_id"))
-    if not branch_id:
-        raise HTTPException(status_code=400, detail="branch_id is required")
-    background.add_task(_run_goods_sync, branch_id)
-    return {"status": "started", "branch_id": branch_id}
-
-
-@app.post("/api/admin/goods/check")
-def api_admin_goods_check(request: Request, payload: dict = Body(default={})):
-    require_admin(request)
-    branch_id = _to_int(payload.get("branch_id"))
-    term = (payload.get("term") or "").strip()
-    if not branch_id:
-        raise HTTPException(status_code=400, detail="branch_id is required")
-    if len(term) < 2:
-        raise HTTPException(status_code=400, detail="term must be at least 2 chars")
-    client = build_client()
-    try:
-        resp = client.search_goods(branch_id, term, count=10)
-        items = []
-        for raw in resp.get("data") or []:
-            item = _extract_good_item(raw)
-            if item.get("good_id") and item.get("title"):
-                items.append(item)
-        return {
-            "status": "ok",
-            "items": items,
-            "count": len(resp.get("data") or []),
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "status": "error",
-            "error": str(exc),
-        }
-
-@app.post("/api/admin/diagnostics/run")
-def api_diagnostics_run(request: Request, payload: dict = Body(default={})):
-    require_admin(request)
-    branch_id = payload.get("branch_id")
-    day = payload.get("date")
-    staff_id = payload.get("staff_id")
-    try:
-        if branch_id is not None:
-            branch_id = int(branch_id)
-    except Exception:
-        branch_id = None
-    try:
-        if staff_id is not None:
-            staff_id = int(staff_id)
-    except Exception:
-        staff_id = None
-    result = run_diagnostics(branch_id=branch_id, day=day, staff_id=staff_id)
-    return result
-
-@app.get("/api/admin/diagnostics/log/tail")
-def api_diagnostics_log_tail(request: Request, lines: int = 200):
-    require_admin(request)
-    info = _latest_log_info()
-    path = Path(info["path"])
-    if not path.exists():
-        return PlainTextResponse("")
-    with path.open("r", encoding="utf-8") as f:
-        content = f.readlines()[-lines:]
-    return PlainTextResponse("".join(content))
-
-@app.get("/api/admin/diagnostics/log/download")
-def api_diagnostics_log_download(request: Request):
-    require_admin(request)
-    info = _latest_log_info()
-    path = Path(info["path"])
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Лог не найден")
-    return FileResponse(path)
-
-@app.post("/api/admin/diagnostics/support-packet")
-def api_support_packet(request: Request, payload: dict = Body(default={})):
-    require_admin(request)
-    branch_ids = payload.get("branch_ids")
-    day = payload.get("date")
-    parsed_ids: list[int] | None = None
-    if branch_ids:
-        if isinstance(branch_ids, str):
-            parts = [p.strip() for p in branch_ids.replace(";", ",").split(",") if p.strip()]
-            parsed_ids = []
-            for part in parts:
-                try:
-                    parsed_ids.append(int(part))
-                except Exception:
-                    continue
-        elif isinstance(branch_ids, list):
-            parsed_ids = []
-            for item in branch_ids:
-                try:
-                    parsed_ids.append(int(item))
-                except Exception:
-                    continue
-    result = run_support_packet(branch_ids=parsed_ids, day=day)
-    return result
-
-@app.get("/api/admin/diagnostics/support-packet/download")
-def api_support_packet_download(request: Request, format: str = "md"):
-    require_admin(request)
-    info = latest_support_packet_info()
-    path = info["md_path"] if format == "md" else info["json_path"]
-    file_path = Path(path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
 
 @app.get("/health")
 def health():
