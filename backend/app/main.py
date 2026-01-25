@@ -856,9 +856,11 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     item_goods = {
         "good_id": good_id,
         "storage_id": storage_id,
-        "price": price,
-        "cost": cost,
-        "amount": tx_amount,
+        "amount": abs(amount),  # positive for sale (API converts to negative)
+        "cost_per_unit": price,
+        "discount": 0,
+        "cost": price * abs(amount),  # total cost
+        "operation_unit_type": 1,  # 1 = sale, 2 = write-off
         "good_special_number": good_special_number,
     }
     
