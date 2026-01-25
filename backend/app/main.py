@@ -862,33 +862,45 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         "good_special_number": good_special_number,
     }
     
-    # Use storage_transaction mode (correct API) by default
+    # Use storage_transaction mode with consumables API
     if mode == "storage_transaction":
-        # Use visit_id as document_id (they seem to be the same in YCLIENTS)
-        document_id = visit_id
-        if not document_id:
-            raise HTTPException(status_code=400, detail="document_id (visit_id) not found for record")
+        # Consumables API requires service_id
+        if not service_id:
+            # Try to get first service from record
+            services = record_data.get("services") or []
+            if services:
+                service_id = _to_int(services[0].get("id"))
         
-        # Get staff_id and client_id from record
-        staff_id = _to_int(record_data.get("staff_id") or (record_data.get("staff") or {}).get("id"))
-        client_id = _to_int(record_data.get("client_id") or (record_data.get("client") or {}).get("id"))
+        if not service_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="service_id is required for storage_transaction mode. The record must have at least one service."
+            )
+        
+        consumable_item = {
+            "good_id": good_id,
+            "amount": abs(amount),
+            "cost_per_unit": price,
+            "cost": price * abs(amount),
+            "storage_id": storage_id,
+        }
         
         try:
-            resp = client.create_goods_transaction(
+            resp = client.set_record_consumables(
                 company_id=branch_id,
-                document_id=document_id,
-                good_id=good_id,
-                storage_id=storage_id,
-                amount=abs(amount),  # positive amount for sale
-                cost_per_unit=price,
-                cost=cost * abs(amount),  # total cost
-                discount=0,
-                operation_unit_type=1,  # 1 = sale
-                master_id=staff_id,
-                client_id=client_id,
-                good_special_number=good_special_number,
+                record_id=record_id,
+                service_id=service_id,
+                consumables=[consumable_item],
             )
-            added_tx = _to_int((resp.get("data") or {}).get("id"))
+            # set_record_consumables may not return individual transaction ID
+            added_tx = None
+            if resp.get("data"):
+                data = resp.get("data")
+                if isinstance(data, list) and data:
+                    added_tx = _to_int(data[0].get("id"))
+                elif isinstance(data, dict):
+                    added_tx = _to_int(data.get("id"))
+            
             _audit_mini(
                 "add",
                 branch_id,

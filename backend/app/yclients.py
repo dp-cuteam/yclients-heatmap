@@ -84,8 +84,8 @@ class YClientsClient:
                 )
                 data = resp.json() if resp.text else {}
                 
-                # Log all PUT/POST requests to visits and goods_transactions for debugging
-                if method in ("PUT", "POST") and ("/visits/" in path or "/goods_transactions/" in path):
+                # Log all PUT/POST requests to visits, goods_transactions, and consumables for debugging
+                if method in ("PUT", "POST") and ("/visits/" in path or "/goods_transactions/" in path or "/consumables/" in path):
                     _log_api_call(method, url, params, json_body, resp.status_code, data)
                 
                 if resp.status_code >= 500:
