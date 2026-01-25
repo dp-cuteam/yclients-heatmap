@@ -28,5 +28,7 @@
 }
 ```
 
-## Коммит
-`[MINI] Fix add good: use update_visit with goods_transactions per YCLIENTS support`
+## Коммиты
+1. `[MINI] Fix add good: use update_visit with goods_transactions per YCLIENTS support`
+2. `[MINI] Add walkthrough docs`
+3. `[MINI] Remove mode selection UI - backend now uses only update_visit`
