@@ -864,10 +864,10 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     
     # Use storage_transaction mode (correct API) by default
     if mode == "storage_transaction":
-        # Get document_id for the goods transaction API
-        document_id = _record_document_id(record_data)
+        # Use visit_id as document_id (they seem to be the same in YCLIENTS)
+        document_id = visit_id
         if not document_id:
-            raise HTTPException(status_code=400, detail="document_id not found for record; ensure the record has a visit document")
+            raise HTTPException(status_code=400, detail="document_id (visit_id) not found for record")
         
         # Get staff_id and client_id from record
         staff_id = _to_int(record_data.get("staff_id") or (record_data.get("staff") or {}).get("id"))
