@@ -892,14 +892,15 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
                 service_id=service_id,
                 consumables=[consumable_item],
             )
-            # set_record_consumables may not return individual transaction ID
+            # Extract goods_transaction_id from consumables response
+            # Response structure: data[0].consumables[0].goods_transaction_id
             added_tx = None
             if resp.get("data"):
                 data = resp.get("data")
                 if isinstance(data, list) and data:
-                    added_tx = _to_int(data[0].get("id"))
-                elif isinstance(data, dict):
-                    added_tx = _to_int(data.get("id"))
+                    consumables = data[0].get("consumables") or []
+                    if consumables:
+                        added_tx = _to_int(consumables[0].get("goods_transaction_id"))
             
             _audit_mini(
                 "add",
