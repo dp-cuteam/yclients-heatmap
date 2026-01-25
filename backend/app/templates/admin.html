@@ -18,6 +18,7 @@
           <a class="ghost" href="/">К теплокарте</a>
           <a class="ghost" href="/historical">Исторические данные</a>
           <a class="ghost" href="/summary">Теплокарты свод</a>
+          <a class="ghost" href="/cuteam">Показатели</a>
           <form method="post" action="/logout">
             <button class="ghost" type="submit">Выйти</button>
           </form>
@@ -104,6 +105,38 @@
           <pre id="histFiles" class="status-log"></pre>
         </div>
 
+
+        <div class="admin-divider"></div>
+        <section class="cuteam-panel">
+          <h2>Показатели (Google Sheet)</h2>
+          <div class="admin-status">
+            <div class="status-card">
+              <div class="status-label">Хранилище</div>
+              <div id="cuteamDbStatus" class="status-value">—</div>
+              <div id="cuteamDbMeta" class="status-meta">—</div>
+            </div>
+            <div class="status-card">
+              <div class="status-label">Диапазон данных</div>
+              <div id="cuteamRange" class="status-value">—</div>
+              <div id="cuteamRangeMeta" class="status-meta">—</div>
+            </div>
+            <div class="status-card">
+              <div class="status-label">Синхронизация</div>
+              <div id="cuteamSyncStatus" class="status-value">—</div>
+              <div id="cuteamSyncMeta" class="status-meta">—</div>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <div class="field" style="min-width: 260px;">
+              <label>Листы (через запятую)</label>
+              <input id="cuteamSheetNames" type="text" placeholder="ИТОГО-26" />
+            </div>
+            <button id="cuteamSync" class="primary">Синхронизировать</button>
+            <button id="cuteamSyncDry" class="ghost">Dry-run</button>
+          </div>
+          <div id="cuteamEnvMeta" class="status-meta">—</div>
+          <pre id="cuteamOutput" class="status-log">—</pre>
+        </section>
 
         <div class="admin-divider"></div>
         <section class="audit-panel">

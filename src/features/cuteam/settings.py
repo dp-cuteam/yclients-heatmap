@@ -24,6 +24,8 @@ def _resolve_path(value: str | Path, base: Path) -> Path:
 class CuteamSettings:
     root_dir: Path
     data_dir: Path
+    db_url: str | None
+    db_url_env: str | None
     db_path: Path
     schema_path: Path
     branch_mapping_path: Path
@@ -32,6 +34,14 @@ class CuteamSettings:
 
 def load_settings() -> CuteamSettings:
     data_dir = _resolve_path(os.getenv("DATA_DIR", str(ROOT_DIR / "data")), ROOT_DIR)
+    db_url = os.getenv("CUTEAM_DATABASE_URL")
+    db_url_env = None
+    if db_url:
+        db_url_env = "CUTEAM_DATABASE_URL"
+    else:
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            db_url_env = "DATABASE_URL"
     db_path = _resolve_path(os.getenv("CUTEAM_DB_PATH", str(data_dir / "cuteam.db")), ROOT_DIR)
     indicators_dir = ROOT_DIR / INDICATORS_DIR_NAME
     schema_path = indicators_dir / "shared" / "db" / "schema.sql"
@@ -40,6 +50,8 @@ def load_settings() -> CuteamSettings:
     return CuteamSettings(
         root_dir=ROOT_DIR,
         data_dir=data_dir,
+        db_url=db_url.strip() if db_url else None,
+        db_url_env=db_url_env,
         db_path=db_path,
         schema_path=schema_path,
         branch_mapping_path=branch_mapping_path,
