@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, time as dt_time
+from dataclasses import asdict
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -39,6 +40,7 @@ from .scheduler import start_scheduler, stop_scheduler
 from .utils import daterange, week_start_monday, resource_sort_key, parse_datetime
 from .yclients import build_client
 from src.features.cuteam.api import router as cuteam_api
+from src.features.cuteam import admin_service as cuteam_admin
 from src.features.cuteam.views import router as cuteam_views
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -1084,6 +1086,30 @@ def api_historical_import(request: Request, background: BackgroundTasks, payload
     run_id = hist_start_import(mode)
     background.add_task(hist_run_import, run_id, mode)
     return {"status": "started", "run_id": run_id}
+
+
+@app.get("/api/admin/cuteam/status")
+def api_cuteam_status(request: Request):
+    require_admin(request)
+    status = cuteam_admin.get_status()
+    return asdict(status)
+
+
+@app.post("/api/admin/cuteam/sync")
+def api_cuteam_sync(request: Request, background: BackgroundTasks, payload: dict = Body(default={})):
+    require_admin(request)
+    sheet_names = payload.get("sheet_names") or []
+    dry_run = bool(payload.get("dry_run"))
+    if isinstance(sheet_names, str):
+        sheet_names = [name.strip() for name in sheet_names.split(",") if name.strip()]
+    try:
+        task = cuteam_admin.start_sync(sheet_names, dry_run=dry_run)
+    except RuntimeError as exc:
+        detail = str(exc)
+        code = 409 if "already running" in detail else 400
+        raise HTTPException(status_code=code, detail=detail) from exc
+    background.add_task(task)
+    return {"status": "started", "sheets": sheet_names, "dry_run": dry_run}
 
 
 @app.get("/api/admin/yclients-debug-log")

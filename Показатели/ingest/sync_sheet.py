@@ -1,4 +1,4 @@
-"""Sync manual data from Google Sheets (or local .xlsx) into SQLite."""
+"""Sync manual data from Google Sheets (or local .xlsx) into SQLite/Postgres."""
 
 from __future__ import annotations
 
@@ -13,6 +13,13 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except Exception:  # noqa: BLE001
+    psycopg = None
+    dict_row = None
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -26,7 +33,7 @@ DEFAULT_SHEET_NAME = "\u0418\u0422\u041e\u0413\u041e-26"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Sync manual sheet data into SQLite.")
+    parser = argparse.ArgumentParser(description="Sync manual sheet data into SQLite/Postgres.")
     parser.add_argument("--db", default=str(ROOT / "data" / "cuteam.db"))
     parser.add_argument("--sheet-id", default=os.environ.get("SHEET_ID"))
     parser.add_argument("--sheet-name", default=os.environ.get("SHEET_NAME", DEFAULT_SHEET_NAME))
@@ -37,6 +44,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date-to", dest="date_to", help="YYYY-MM-DD")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
+
+
+def _is_postgres_target(value: str) -> bool:
+    return value.startswith("postgres")
+
+
+class DBConn:
+    def __init__(self, conn, kind: str):
+        self._conn = conn
+        self._kind = kind
+
+    def _prepare(self, sql: str) -> str:
+        if self._kind == "postgres":
+            return sql.replace("?", "%s")
+        return sql
+
+    def execute(self, sql: str, params: Iterable | None = None):
+        params = [] if params is None else params
+        sql = self._prepare(sql)
+        if self._kind == "postgres":
+            cur = self._conn.cursor()
+            cur.execute(sql, params)
+            return cur
+        return self._conn.execute(sql, params)
+
+    def executemany(self, sql: str, seq: Iterable[Iterable]):
+        sql = self._prepare(sql)
+        if self._kind == "postgres":
+            cur = self._conn.cursor()
+            cur.executemany(sql, seq)
+            return cur
+        return self._conn.executemany(sql, seq)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def _connect_db(target: str) -> DBConn:
+    if _is_postgres_target(target):
+        if not psycopg:
+            raise RuntimeError("psycopg is required for Postgres sync")
+        raw = psycopg.connect(target, row_factory=dict_row)
+        return DBConn(raw, "postgres")
+    db_path = Path(target)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    raw = sqlite3.connect(str(db_path))
+    raw.row_factory = sqlite3.Row
+    return DBConn(raw, "sqlite")
 
 
 def load_google_values(sheet_id: str, sheet_name: str, key_path: Optional[str], key_b64: Optional[str]) -> List[List[Any]]:
@@ -358,13 +416,22 @@ def iter_records(
     return records, stats
 
 
-def ensure_schema(conn: sqlite3.Connection) -> None:
+def _split_sql_statements(sql: str) -> List[str]:
+    parts = [chunk.strip() for chunk in sql.split(";")]
+    return [part for part in parts if part]
+
+
+def ensure_schema(conn: DBConn) -> None:
     schema_path = ROOT / "shared" / "db" / "schema.sql"
-    conn.executescript(schema_path.read_text(encoding="utf-8"))
+    schema = schema_path.read_text(encoding="utf-8")
+    if conn._kind == "postgres":
+        schema = schema.replace("CREATE VIEW IF NOT EXISTS", "CREATE OR REPLACE VIEW")
+    for stmt in _split_sql_statements(schema):
+        conn.execute(stmt)
     conn.commit()
 
 
-def upsert_records(conn: sqlite3.Connection, records: Sequence[Tuple[str, str, str, float, str]]) -> int:
+def upsert_records(conn: DBConn, records: Sequence[Tuple[str, str, str, float, str]]) -> int:
     if not records:
         return 0
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -380,12 +447,14 @@ def upsert_records(conn: sqlite3.Connection, records: Sequence[Tuple[str, str, s
     return len(rows)
 
 
-def seed_dimensions(conn: sqlite3.Connection) -> None:
+def seed_dimensions(conn: DBConn) -> None:
     # Branches
-    conn.executemany(
-        "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)",
-        [(b["code"], b["name"]) for b in reference.BRANCHES],
+    branch_sql = (
+        "INSERT INTO branches (code, name) VALUES (?, ?) ON CONFLICT(code) DO NOTHING"
+        if conn._kind == "postgres"
+        else "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)"
     )
+    conn.executemany(branch_sql, [(b["code"], b["name"]) for b in reference.BRANCHES])
 
     # Metrics
     metric_rows = []
@@ -396,10 +465,12 @@ def seed_dimensions(conn: sqlite3.Connection) -> None:
     for code, meta in reference.DERIVED_METRICS.items():
         metric_rows.append((code, meta["label"]))
 
-    conn.executemany(
-        "INSERT OR IGNORE INTO metrics (code, label) VALUES (?, ?)",
-        metric_rows,
+    metric_sql = (
+        "INSERT INTO metrics (code, label) VALUES (?, ?) ON CONFLICT(code) DO NOTHING"
+        if conn._kind == "postgres"
+        else "INSERT OR IGNORE INTO metrics (code, label) VALUES (?, ?)"
     )
+    conn.executemany(metric_sql, metric_rows)
     conn.commit()
 
 
@@ -423,9 +494,7 @@ def main() -> None:
     if args.dry_run:
         return
 
-    db_path = Path(args.db)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = _connect_db(args.db)
     try:
         ensure_schema(conn)
         seed_dimensions(conn)

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from .db import get_conn, init_schema
+from .db import get_conn, init_schema, is_postgres
 from .settings import settings
 
 
@@ -37,15 +37,20 @@ def seed_dimensions() -> SeedStats:
             continue
         metric_rows.append((code, label, is_derived))
 
+    branch_sql = (
+        "INSERT INTO branches (code, name) VALUES (?, ?) ON CONFLICT(code) DO NOTHING"
+        if is_postgres()
+        else "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)"
+    )
+    metric_sql = (
+        "INSERT INTO metrics (code, label, is_derived) VALUES (?, ?, ?) ON CONFLICT(code) DO NOTHING"
+        if is_postgres()
+        else "INSERT OR IGNORE INTO metrics (code, label, is_derived) VALUES (?, ?, ?)"
+    )
+
     with get_conn() as conn:
-        conn.executemany(
-            "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)",
-            branch_rows,
-        )
-        conn.executemany(
-            "INSERT OR IGNORE INTO metrics (code, label, is_derived) VALUES (?, ?, ?)",
-            metric_rows,
-        )
+        conn.executemany(branch_sql, branch_rows)
+        conn.executemany(metric_sql, metric_rows)
         conn.commit()
 
     return SeedStats(branches=len(branch_rows), metrics=len(metric_rows))
@@ -61,7 +66,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     stats = bootstrap()
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     print(f"[cuteam] bootstrap complete at {stamp} (branches={stats.branches}, metrics={stats.metrics})")
-    print(f"[cuteam] db_path={settings.db_path}")
+    if settings.db_url:
+        label = settings.db_url_env or "DATABASE_URL"
+        print(f"[cuteam] db_source=Postgres ({label})")
+    else:
+        print(f"[cuteam] db_path={settings.db_path}")
     return 0
 
 

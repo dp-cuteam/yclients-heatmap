@@ -19,6 +19,17 @@ const goodsBranch = document.getElementById("goodsBranch");
 const goodsTerm = document.getElementById("goodsTerm");
 const goodsCheckBtn = document.getElementById("goodsCheck");
 const goodsOutput = document.getElementById("goodsOutput");
+const cuteamDbStatus = document.getElementById("cuteamDbStatus");
+const cuteamDbMeta = document.getElementById("cuteamDbMeta");
+const cuteamRange = document.getElementById("cuteamRange");
+const cuteamRangeMeta = document.getElementById("cuteamRangeMeta");
+const cuteamSyncStatus = document.getElementById("cuteamSyncStatus");
+const cuteamSyncMeta = document.getElementById("cuteamSyncMeta");
+const cuteamEnvMeta = document.getElementById("cuteamEnvMeta");
+const cuteamOutput = document.getElementById("cuteamOutput");
+const cuteamSheetNames = document.getElementById("cuteamSheetNames");
+const cuteamSyncBtn = document.getElementById("cuteamSync");
+const cuteamSyncDryBtn = document.getElementById("cuteamSyncDry");
 
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options);
@@ -287,6 +298,119 @@ async function checkGoodsApi() {
 
 if (goodsCheckBtn) {
   goodsCheckBtn.addEventListener("click", checkGoodsApi);
+}
+
+async function refreshCuteamStatus() {
+  if (!cuteamDbStatus) return;
+  try {
+    const data = await fetchJSON("/api/admin/cuteam/status");
+    const dbSource = data.db_source || "SQLite";
+    if (!data.db_exists) {
+      cuteamDbStatus.textContent = "Нет базы";
+    } else {
+      cuteamDbStatus.textContent = dbSource;
+    }
+    const dbMetaParts = [];
+    if (data.db_path) dbMetaParts.push(data.db_path);
+    if (data.db_size !== null && data.db_size !== undefined) {
+      dbMetaParts.push(formatBytes(data.db_size));
+    }
+    cuteamDbMeta.textContent = dbMetaParts.join(" · ") || "—";
+
+    if (data.date_min || data.date_max) {
+      cuteamRange.textContent = `${data.date_min || "?"} — ${data.date_max || "?"}`;
+    } else {
+      cuteamRange.textContent = "—";
+    }
+    const rangeParts = [];
+    if (data.rows !== null && data.rows !== undefined) {
+      rangeParts.push(`строк: ${data.rows}`);
+    }
+    if (data.branches !== null && data.branches !== undefined) {
+      rangeParts.push(`филиалов: ${data.branches}`);
+    }
+    if (data.updated_at) {
+      rangeParts.push(`обновлено: ${data.updated_at}`);
+    }
+    cuteamRangeMeta.textContent = rangeParts.join(" · ") || "—";
+
+    const sync = data.sync || {};
+    const syncStatusMap = {
+      idle: "Ожидание",
+      running: "Выполняется",
+      success: "Успешно",
+      error: "Ошибка",
+    };
+    cuteamSyncStatus.textContent = syncStatusMap[sync.status] || sync.status || "—";
+    const syncParts = [];
+    if (sync.started_at) syncParts.push(`старт: ${sync.started_at}`);
+    if (sync.finished_at) syncParts.push(`финиш: ${sync.finished_at}`);
+    if (sync.last_error) syncParts.push(`ошибка: ${sync.last_error}`);
+    if (sync.last_sheets && sync.last_sheets.length) {
+      syncParts.push(`листы: ${sync.last_sheets.join(", ")}`);
+    }
+    if (sync.dry_run) syncParts.push("dry-run");
+    cuteamSyncMeta.textContent = syncParts.join(" · ") || "—";
+
+    if (cuteamOutput) {
+      cuteamOutput.textContent = sync.last_output || "—";
+    }
+
+    const env = data.env || {};
+    const envParts = [];
+    if (env.sheet_name) envParts.push(`лист: ${env.sheet_name}`);
+    if (env.sheet_id) envParts.push(`sheet_id: ${env.sheet_id}`);
+    if (env.has_sa_json || env.has_sa_json_b64) {
+      envParts.push("service account: ok");
+    } else {
+      envParts.push("service account: нет");
+    }
+    if (env.db_env) envParts.push(`db env: ${env.db_env}`);
+    if (env.db_source) envParts.push(`db: ${env.db_source}`);
+    if (cuteamEnvMeta) {
+      cuteamEnvMeta.textContent = envParts.join(" · ") || "—";
+    }
+    if (cuteamSheetNames && !cuteamSheetNames.value && env.sheet_name) {
+      cuteamSheetNames.value = env.sheet_name;
+    }
+  } catch (err) {
+    cuteamDbStatus.textContent = "Ошибка";
+    cuteamDbMeta.textContent = err.message || "—";
+  }
+}
+
+async function startCuteamSync(dryRun) {
+  if (!cuteamSyncBtn) return;
+  cuteamSyncBtn.disabled = true;
+  if (cuteamSyncDryBtn) cuteamSyncDryBtn.disabled = true;
+  try {
+    const raw = (cuteamSheetNames?.value || "").trim();
+    const sheetNames = raw
+      ? raw.split(",").map((name) => name.trim()).filter(Boolean)
+      : [];
+    await fetchJSON("/api/admin/cuteam/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheet_names: sheetNames, dry_run: !!dryRun }),
+    });
+  } catch (err) {
+    if (cuteamOutput) cuteamOutput.textContent = err.message || "Ошибка";
+  } finally {
+    cuteamSyncBtn.disabled = false;
+    if (cuteamSyncDryBtn) cuteamSyncDryBtn.disabled = false;
+    await refreshCuteamStatus();
+  }
+}
+
+if (cuteamSyncBtn) {
+  cuteamSyncBtn.addEventListener("click", () => startCuteamSync(false));
+}
+if (cuteamSyncDryBtn) {
+  cuteamSyncDryBtn.addEventListener("click", () => startCuteamSync(true));
+}
+if (cuteamDbStatus) {
+  refreshCuteamStatus().catch((err) => console.error(err));
+  setInterval(refreshCuteamStatus, 10000);
 }
 
 loadGoodsBranches();
