@@ -38,6 +38,8 @@ from .historical import (
 from .scheduler import start_scheduler, stop_scheduler
 from .utils import daterange, week_start_monday, resource_sort_key, parse_datetime
 from .yclients import build_client
+from src.features.cuteam.api import router as cuteam_api
+from src.features.cuteam.views import router as cuteam_views
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -52,6 +54,9 @@ app.mount(
 )
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+
+app.include_router(cuteam_api)
+app.include_router(cuteam_views)
 
 @app.on_event("startup")
 def on_startup():
@@ -810,25 +815,31 @@ def api_mini_goods_search(request: Request, branch_id: int, term: str, limit: in
 
 
 @app.post("/api/mini/records/{record_id}/goods")
-def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(default={})):  # noqa: C901
+def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(default={})):
+    """Add a good to a record using YCLIENTS update_visit API.
+    
+    Uses goods_transactions per YCLIENTS support recommendation:
+    - amount: negative value (e.g., -10 for 10 grams)
+    - price: unit price
+    - cost: total cost (price * abs(amount))
+    """
     _require_session(request)
     branch_id = _to_int(payload.get("branch_id"))
     good_id = _to_int(payload.get("good_id"))
     amount = _to_float(payload.get("amount"))
-    service_id = _to_int(payload.get("service_id"))
     tg_user = payload.get("tg_user") or {}
     attendance_override = _to_int(payload.get("attendance"))
     comment_override = payload.get("comment")
     good_special_number = _clean_text(payload.get("good_special_number") or "")
     price_override = _to_float(payload.get("price"))
-    cost_override = _to_float(payload.get("cost"))
-    mode = _clean_text(payload.get("mode") or "storage_transaction").lower()
+
     if not branch_id:
         raise HTTPException(status_code=400, detail="branch_id is required")
     if not good_id:
         raise HTTPException(status_code=400, detail="good_id is required")
     if amount is None or amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be positive")
+
     client = build_client()
     storage_id = _to_int(payload.get("storage_id")) or _get_storage_id(client, branch_id)
     if not storage_id:
@@ -839,6 +850,7 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
     visit_id = _record_visit_id(record_data)
     if not visit_id:
         raise HTTPException(status_code=404, detail="visit_id not found for record")
+
     attendance = attendance_override if attendance_override is not None else _record_attendance(record_data)
     comment = comment_override if comment_override is not None else record_data.get("comment")
     comment = _clean_text(comment)
@@ -850,156 +862,45 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
         good_data = good_resp.get("data") or {}
         _MINI_CACHE.set(good_cache_key, good_data, _MINI_GOOD_TTL)
     price = price_override if price_override is not None else _guess_price(good_data)
-    cost = cost_override if cost_override is not None else price
-    tx_amount = -abs(amount)
 
-    item_goods = {
+    # Per YCLIENTS support: amount must be NEGATIVE for goods consumed/sold
+    tx_amount = -abs(amount)
+    total_cost = price * abs(amount)
+
+    # Build goods_transactions item per YCLIENTS support recommendation
+    goods_item = {
         "good_id": good_id,
         "storage_id": storage_id,
-        "amount": abs(amount),  # positive for sale (API converts to negative)
-        "cost_per_unit": price,
-        "discount": 0,
-        "cost": price * abs(amount),  # total cost
-        "operation_unit_type": 1,  # 1 = sale, 2 = write-off
+        "amount": tx_amount,
+        "price": price,
+        "cost": total_cost,
         "good_special_number": good_special_number,
     }
-    
-    # Use storage_transaction mode with consumables API
-    if mode == "storage_transaction":
-        # Consumables API requires service_id
-        if not service_id:
-            # Try to get first service from record
-            services = record_data.get("services") or []
-            if services:
-                service_id = _to_int(services[0].get("id"))
-        
-        if not service_id:
-            raise HTTPException(
-                status_code=400, 
-                detail="service_id is required for storage_transaction mode. The record must have at least one service."
-            )
-        
-        consumable_item = {
-            "good_id": good_id,
-            "amount": abs(amount),
-            "cost_per_unit": price,
-            "cost": price * abs(amount),
-            "storage_id": storage_id,
-        }
-        
-        try:
-            resp = client.set_record_consumables(
-                company_id=branch_id,
-                record_id=record_id,
-                service_id=service_id,
-                consumables=[consumable_item],
-            )
-            # Extract goods_transaction_id from consumables response
-            # Response structure: data[0].consumables[0].goods_transaction_id
-            added_tx = None
-            if resp.get("data"):
-                data = resp.get("data")
-                if isinstance(data, list) and data:
-                    consumables = data[0].get("consumables") or []
-                    if consumables:
-                        added_tx = _to_int(consumables[0].get("goods_transaction_id"))
-            
-            _audit_mini(
-                "add",
-                branch_id,
-                record_id,
-                service_id=service_id,
-                good_id=good_id,
-                amount=amount,
-                price=price,
-                storage_id=storage_id,
-                tg_user=tg_user,
-                status="ok",
-            )
-            return {
-                "status": "ok",
-                "added": {
-                    "good_id": good_id,
-                    "amount": amount,
-                    "price": price,
-                    "goods_transaction_id": added_tx,
-                },
-            }
-        except Exception as exc:  # noqa: BLE001
-            _audit_mini(
-                "add",
-                branch_id,
-                record_id,
-                service_id=service_id,
-                good_id=good_id,
-                amount=amount,
-                price=price,
-                storage_id=storage_id,
-                tg_user=tg_user,
-                status="error",
-                error=str(exc),
-            )
-            raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
 
-    # Legacy modes (kept for backward compatibility but they don't work)
     visit_payload = {
         "attendance": attendance,
         "comment": comment,
         "services": [],
+        "goods_transactions": [goods_item],
     }
-    if mode == "new_transactions":
-        visit_payload["new_transactions"] = [
-            {
-                "good_id": good_id,
-                "storage_id": storage_id,
-                "amount": tx_amount,
-                "cost_per_unit": price,
-                "discount": 0,
-                "cost": cost,
-                "operation_unit_type": 1,
-                "good_special_number": good_special_number,
-            }
-        ]
-    elif mode == "goods_merge":
-        existing_goods = list(record_data.get("goods_transactions") or [])
-        existing_goods.append(item_goods)
-        visit_payload["goods_transactions"] = existing_goods
-    else:
-        visit_payload["goods_transactions"] = [item_goods]
+
     try:
         resp = client.update_visit(visit_id, record_id, visit_payload)
     except Exception as exc:  # noqa: BLE001
         _log_mini_yclients_response(
-            "add",
-            branch_id,
-            record_id,
-            visit_id,
-            visit_payload,
-            None,
-            status="error",
-            error=str(exc),
+            "add", branch_id, record_id, visit_id, visit_payload, None,
+            status="error", error=str(exc),
         )
         _audit_mini(
-            "add",
-            branch_id,
-            record_id,
-            service_id=service_id,
-            good_id=good_id,
-            amount=amount,
-            price=price,
-            storage_id=storage_id,
-            tg_user=tg_user,
-            status="error",
-            error=str(exc),
+            "add", branch_id, record_id,
+            good_id=good_id, amount=amount, price=price,
+            storage_id=storage_id, tg_user=tg_user,
+            status="error", error=str(exc),
         )
         raise HTTPException(status_code=502, detail=f"Ошибка YCLIENTS: {exc}") from exc
+
     _log_mini_yclients_response(
-        "add",
-        branch_id,
-        record_id,
-        visit_id,
-        visit_payload,
-        resp,
+        "add", branch_id, record_id, visit_id, visit_payload, resp,
     )
 
     added_tx = _find_goods_tx_id(resp.get("data") or {}, good_id, tx_amount, storage_id)
@@ -1011,16 +912,9 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
             added_tx = None
 
     _audit_mini(
-        "add",
-        branch_id,
-        record_id,
-        service_id=service_id,
-        good_id=good_id,
-        amount=amount,
-        price=price,
-        storage_id=storage_id,
-        tg_user=tg_user,
-        status="ok",
+        "add", branch_id, record_id,
+        good_id=good_id, amount=amount, price=price,
+        storage_id=storage_id, tg_user=tg_user, status="ok",
     )
 
     return {
@@ -1032,7 +926,6 @@ def api_mini_add_good(request: Request, record_id: int, payload: dict = Body(def
             "goods_transaction_id": added_tx,
         },
     }
-
 
 @app.post("/api/mini/records/{record_id}/goods/undo")
 def api_mini_undo_good(request: Request, record_id: int, payload: dict = Body(default={})):

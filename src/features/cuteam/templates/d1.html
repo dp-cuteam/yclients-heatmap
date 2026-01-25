@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cuteam · Коворкинг + Кофейня</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .cuteam-card {
+        background: var(--shell);
+        border-radius: var(--radius-lg);
+        padding: 18px;
+        box-shadow: var(--shadow);
+        margin-top: 20px;
+      }
+
+      .legend-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 12px;
+        align-items: center;
+      }
+
+      .legend-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        border-radius: 999px;
+        padding: 6px 12px;
+        border: 1px solid #ece6df;
+      }
+
+      .pill-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+
+      .pill-week {
+        background: #ffe5d8;
+      }
+
+      .pill-month {
+        background: #fff2bf;
+      }
+
+      .pill-plan {
+        background: #d6f3e6;
+      }
+
+      .d1-scroll {
+        overflow: auto;
+        border-radius: var(--radius-md);
+        border: 1px solid #ebe5de;
+        background: #fff;
+        max-height: 70vh;
+      }
+
+      .d1-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: 980px;
+        width: 100%;
+      }
+
+      .d1-table th,
+      .d1-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f1ebe5;
+        border-right: 1px solid #f1ebe5;
+        font-size: 13px;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .d1-table thead th {
+        position: sticky;
+        top: 0;
+        background: #fffaf5;
+        z-index: 4;
+        font-weight: 600;
+      }
+
+      .d1-table th.metric-col {
+        text-align: left;
+        min-width: 230px;
+        max-width: 260px;
+      }
+
+      .d1-table th.unit-col {
+        min-width: 70px;
+        text-align: center;
+      }
+
+      .sticky-col {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 3;
+      }
+
+      .sticky-col.unit-col {
+        left: 230px;
+        z-index: 3;
+      }
+
+      .group-row th {
+        background: #f8efe6;
+        font-weight: 600;
+        text-align: left;
+        color: #6f4a3f;
+      }
+
+      .week-total {
+        background: #fff7f0;
+        font-weight: 600;
+      }
+
+      .month-total {
+        background: #fff4d6;
+        font-weight: 600;
+      }
+
+      .plan-col {
+        background: #e9f7f0;
+      }
+
+      .d1-table td.plan-col input {
+        width: 100%;
+        border: 1px solid #cde8da;
+        background: #fff;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 12px;
+        text-align: right;
+      }
+
+      .plan-status {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .day-head {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .day-head strong {
+        font-size: 12px;
+      }
+
+      .day-head span {
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .toggle-group {
+        display: flex;
+        gap: 8px;
+      }
+
+      .toggle-group label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .empty-state {
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .delta-positive {
+        color: #2f7d55;
+        font-weight: 600;
+      }
+
+      .delta-negative {
+        color: #b2412e;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Cuteam</div>
+          <h1>Дашборд / Коворкинг + Кофейня</h1>
+          <p class="subtitle">Данные из Google Sheet · дни/недели</p>
+        </div>
+        <div class="actions">
+          <a class="ghost" href="/">Теплокарта</a>
+          <a class="ghost" href="/historical">Исторические</a>
+          <a class="ghost" href="/summary">Свод</a>
+          <a class="ghost" href="/admin">Админка</a>
+        </div>
+      </header>
+
+      <section class="filters">
+        <div class="field" id="branchField">
+          <label>Филиал</label>
+          <select id="branchSelect"></select>
+        </div>
+        <div class="field">
+          <label>Месяц</label>
+          <select id="monthSelect"></select>
+        </div>
+        <div class="field">
+          <label>Масштаб</label>
+          <div class="toggle-group">
+            <label><input type="radio" name="scale" value="days" checked /> Дни</label>
+            <label><input type="radio" name="scale" value="weeks" /> Недели</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Пересчитать</label>
+          <button class="ghost" id="recalcBtn" type="button" disabled>Недоступно</button>
+        </div>
+      </section>
+
+      <div class="legend-row">
+        <div class="legend-pill"><span class="pill-dot pill-week"></span>Итог недели</div>
+        <div class="legend-pill"><span class="pill-dot pill-month"></span>Итог месяца</div>
+        <div class="legend-pill"><span class="pill-dot pill-plan"></span>План</div>
+        <div class="plan-status" id="planStatus"></div>
+      </div>
+
+      <section class="cuteam-card">
+        <div id="tableContainer" class="d1-scroll">
+          <div class="empty-state">Загрузка данных…</div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const state = {
+        branchCode: null,
+        month: null,
+        scale: "days",
+        data: null,
+      };
+
+      const branchSelect = document.getElementById("branchSelect");
+      const monthSelect = document.getElementById("monthSelect");
+      const tableContainer = document.getElementById("tableContainer");
+      const planStatus = document.getElementById("planStatus");
+      const branchField = document.getElementById("branchField");
+
+      const RUS_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+      function formatNumber(value, decimals = 0) {
+        return new Intl.NumberFormat("ru-RU", {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        }).format(value);
+      }
+
+      function formatValue(value, unit) {
+        if (value === null || value === undefined) return "";
+        if (unit === "pct") {
+          return `${formatNumber(value, 1)}%`;
+        }
+        if (unit === "ratio") {
+          return formatNumber(value, 2);
+        }
+        if (unit === "rub") {
+          return formatNumber(value, Math.abs(value % 1) > 0.01 ? 2 : 0);
+        }
+        if (unit === "qty") {
+          return formatNumber(value, 0);
+        }
+        return formatNumber(value, 0);
+      }
+
+      function formatPlanSummary(planPct, planDelta) {
+        if (planPct === null || planPct === undefined) return "";
+        const pct = `${formatNumber(planPct, 0)}%`;
+        if (planDelta === null || planDelta === undefined) return pct;
+        const delta = formatNumber(planDelta, Math.abs(planDelta % 1) > 0.01 ? 2 : 0);
+        return `${pct} · ${delta}`;
+      }
+
+      function formatMonthLabel(isoMonth) {
+        const [year, month] = isoMonth.split("-");
+        const date = new Date(Number(year), Number(month) - 1, 1);
+        return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(date);
+      }
+
+      async function fetchJSON(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Ошибка запроса: ${res.status}`);
+        return res.json();
+      }
+
+      async function loadBranches() {
+        const data = await fetchJSON("/api/cuteam/branches");
+        const branches = data.branches || [];
+        branchSelect.innerHTML = "";
+        branches.forEach((branch) => {
+          const opt = document.createElement("option");
+          opt.value = branch.code;
+          opt.textContent = branch.name || branch.code;
+          branchSelect.appendChild(opt);
+        });
+        if (branches.length === 1) {
+          branchField.style.display = "none";
+          state.branchCode = branches[0].code;
+        } else if (branches.length > 0) {
+          state.branchCode = branches[0].code;
+        }
+      }
+
+      async function loadMonths() {
+        if (!state.branchCode) return;
+        const data = await fetchJSON(`/api/cuteam/months?branch_code=${encodeURIComponent(state.branchCode)}`);
+        const months = data.months || [];
+        monthSelect.innerHTML = "";
+        months.forEach((month) => {
+          const opt = document.createElement("option");
+          opt.value = month;
+          opt.textContent = formatMonthLabel(month);
+          monthSelect.appendChild(opt);
+        });
+        if (months.length > 0) {
+          state.month = months[0];
+        }
+      }
+
+      function setPlanStatus(message, isError = false) {
+        planStatus.textContent = message || "";
+        if (!message) return;
+        planStatus.style.color = isError ? "#b2412e" : "#2f7d55";
+        setTimeout(() => {
+          if (planStatus.textContent === message) planStatus.textContent = "";
+        }, 2400);
+      }
+
+      async function savePlan(metricCode, value) {
+        const payload = {
+          branch_code: state.branchCode,
+          month: state.month,
+          metric_code: metricCode,
+          value: value,
+        };
+        const res = await fetch("/api/cuteam/plans", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          throw new Error("Не удалось сохранить план");
+        }
+      }
+
+      function updatePlanLocal(metricCode, value) {
+        if (!state.data || !state.data.metrics) return;
+        state.data.metrics.forEach((metric) => {
+          if (metric.code === metricCode) {
+            metric.plan = value;
+            if (metric.month_total !== null && metric.month_total !== undefined) {
+              if (value !== 0) {
+                metric.plan_pct = (metric.month_total / value) * 100;
+              } else {
+                metric.plan_pct = null;
+              }
+              metric.plan_delta = metric.month_total - value;
+            } else {
+              metric.plan_pct = null;
+              metric.plan_delta = null;
+            }
+          }
+        });
+      }
+
+      function buildTable(data) {
+        if (!data || !data.metrics || data.metrics.length === 0) {
+          tableContainer.innerHTML = '<div class="empty-state">Нет данных за выбранный период.</div>';
+          return;
+        }
+
+        const days = data.days || [];
+        const weeks = data.weeks || [];
+        const metrics = data.metrics || [];
+        const groups = data.groups || {};
+        const scale = state.scale;
+
+        const totalCols =
+          2 + (scale === "days" ? days.length + weeks.length : weeks.length) + 3;
+
+        const table = document.createElement("table");
+        table.className = "d1-table";
+
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+
+        const thMetric = document.createElement("th");
+        thMetric.textContent = "Показатель";
+        thMetric.className = "metric-col sticky-col";
+        headRow.appendChild(thMetric);
+
+        const thUnit = document.createElement("th");
+        thUnit.textContent = "Ед.";
+        thUnit.className = "unit-col sticky-col";
+        headRow.appendChild(thUnit);
+
+        if (scale === "days") {
+          let weekIndex = 0;
+          days.forEach((day, idx) => {
+            const th = document.createElement("th");
+            th.innerHTML = `<div class="day-head"><strong>${String(day.day).padStart(2, "0")}</strong><span>${RUS_DAYS[day.dow]}</span></div>`;
+            headRow.appendChild(th);
+
+            if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+              const thWeek = document.createElement("th");
+              thWeek.textContent = "Итог нед.";
+              thWeek.className = "week-total";
+              headRow.appendChild(thWeek);
+              weekIndex += 1;
+            }
+          });
+        } else {
+          weeks.forEach((week, idx) => {
+            const th = document.createElement("th");
+            const start = week.start.slice(8, 10);
+            const end = week.end.slice(8, 10);
+            th.textContent = `Нед ${idx + 1} (${start}–${end})`;
+            th.className = "week-total";
+            headRow.appendChild(th);
+          });
+        }
+
+        const thMonth = document.createElement("th");
+        thMonth.textContent = "Итого месяц";
+        thMonth.className = "month-total";
+        headRow.appendChild(thMonth);
+
+        const thPlan = document.createElement("th");
+        thPlan.textContent = "План месяц";
+        thPlan.className = "plan-col";
+        headRow.appendChild(thPlan);
+
+        const thFact = document.createElement("th");
+        thFact.textContent = "Факт vs План";
+        thFact.className = "plan-col";
+        headRow.appendChild(thFact);
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        let currentGroup = null;
+
+        metrics.forEach((metric) => {
+          if (metric.group !== currentGroup) {
+            const groupRow = document.createElement("tr");
+            groupRow.className = "group-row";
+            const th = document.createElement("th");
+            th.colSpan = totalCols;
+            th.textContent = groups[metric.group] || metric.group;
+            groupRow.appendChild(th);
+            tbody.appendChild(groupRow);
+            currentGroup = metric.group;
+          }
+
+          const row = document.createElement("tr");
+          const nameCell = document.createElement("th");
+          nameCell.textContent = metric.label;
+          nameCell.className = "metric-col sticky-col";
+          row.appendChild(nameCell);
+
+          const unitCell = document.createElement("td");
+          unitCell.textContent =
+            metric.unit === "rub"
+              ? "руб"
+              : metric.unit === "qty"
+              ? "шт"
+              : metric.unit === "pct"
+              ? "%"
+              : metric.unit;
+          unitCell.className = "unit-col sticky-col";
+          row.appendChild(unitCell);
+
+          if (scale === "days") {
+            let weekIndex = 0;
+            metric.values.forEach((value, idx) => {
+              const td = document.createElement("td");
+              td.textContent = formatValue(value, metric.unit);
+              row.appendChild(td);
+
+              if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+                const weekTd = document.createElement("td");
+                weekTd.className = "week-total";
+                const weekValue = metric.week_totals[weekIndex];
+                weekTd.textContent = formatValue(weekValue, metric.unit);
+                row.appendChild(weekTd);
+                weekIndex += 1;
+              }
+            });
+          } else {
+            metric.week_totals.forEach((value) => {
+              const td = document.createElement("td");
+              td.className = "week-total";
+              td.textContent = formatValue(value, metric.unit);
+              row.appendChild(td);
+            });
+          }
+
+          const monthTd = document.createElement("td");
+          monthTd.className = "month-total";
+          monthTd.textContent = formatValue(metric.month_total, metric.unit);
+          row.appendChild(monthTd);
+
+          const planTd = document.createElement("td");
+          planTd.className = "plan-col";
+          if (metric.plan_enabled) {
+            const input = document.createElement("input");
+            input.type = "number";
+            input.step = "0.01";
+            input.value = metric.plan ?? "";
+            input.dataset.metricCode = metric.code;
+            input.addEventListener("blur", async (event) => {
+              const nextValue = Number(event.target.value || 0);
+              try {
+                await savePlan(metric.code, nextValue);
+                updatePlanLocal(metric.code, nextValue);
+                setPlanStatus("План сохранён");
+                buildTable(state.data);
+              } catch (err) {
+                console.error(err);
+                setPlanStatus("Ошибка сохранения", true);
+              }
+            });
+            input.addEventListener("keydown", (event) => {
+              if (event.key === "Enter") event.target.blur();
+            });
+            planTd.appendChild(input);
+          }
+          row.appendChild(planTd);
+
+          const factTd = document.createElement("td");
+          factTd.className = "plan-col";
+          if (metric.plan_enabled) {
+            const summary = formatPlanSummary(metric.plan_pct, metric.plan_delta);
+            factTd.textContent = summary;
+            if (metric.plan_delta !== null && metric.plan_delta !== undefined) {
+              factTd.classList.add(metric.plan_delta >= 0 ? "delta-positive" : "delta-negative");
+            }
+          }
+          row.appendChild(factTd);
+
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        tableContainer.innerHTML = "";
+        tableContainer.appendChild(table);
+      }
+
+      async function loadData() {
+        if (!state.branchCode || !state.month) return;
+        tableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
+        try {
+          const data = await fetchJSON(
+            `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(state.month)}`
+          );
+          state.data = data;
+          buildTable(data);
+        } catch (err) {
+          console.error(err);
+          tableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить данные.</div>';
+        }
+      }
+
+      branchSelect.addEventListener("change", async (event) => {
+        state.branchCode = event.target.value;
+        await loadMonths();
+        monthSelect.value = state.month;
+        loadData();
+      });
+
+      monthSelect.addEventListener("change", (event) => {
+        state.month = event.target.value;
+        loadData();
+      });
+
+      document.querySelectorAll('input[name="scale"]').forEach((radio) => {
+        radio.addEventListener("change", (event) => {
+          state.scale = event.target.value;
+          buildTable(state.data);
+        });
+      });
+
+      (async function init() {
+        try {
+          await loadBranches();
+          if (!state.branchCode) {
+            tableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
+            return;
+          }
+          await loadMonths();
+          monthSelect.value = state.month;
+          await loadData();
+        } catch (err) {
+          console.error(err);
+          tableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
+        }
+      })();
+    </script>
+  </body>
+</html>
