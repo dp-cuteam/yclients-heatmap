@@ -1,19 +1,45 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Any, Dict, List, Optional
 
-from .db import get_conn
+from .db import get_conn, init_schema
 from .metrics import D1_METRICS, GROUP_LABELS, PLAN_METRIC_CODES
+from .settings import settings
+
+
+def _fallback_branches() -> List[Dict[str, Any]]:
+    path = settings.branch_mapping_path
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    branches = []
+    for item in data or []:
+        code = item.get("code")
+        name = item.get("name") or code
+        if code:
+            branches.append({"code": code, "name": name})
+    return branches
 
 
 def list_branches() -> List[Dict[str, Any]]:
-    with get_conn() as conn:
-        rows = conn.execute("SELECT code, name FROM branches ORDER BY name").fetchall()
+    init_schema()
+    try:
+        with get_conn() as conn:
+            rows = conn.execute("SELECT code, name FROM branches ORDER BY name").fetchall()
+    except Exception:
+        return _fallback_branches()
+    if not rows:
+        return _fallback_branches()
     return [{"code": row["code"], "name": row["name"]} for row in rows]
 
 
 def list_months(branch_code: str) -> List[str]:
+    init_schema()
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT substr(date, 1, 7) AS month "
@@ -125,6 +151,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 
 
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
+    init_schema()
     month_start = _parse_month(month)
     days = _month_days(month_start)
     if not days:
@@ -232,6 +259,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
 
 
 def upsert_plan(branch_code: str, month: str, metric_code: str, value: float) -> None:
+    init_schema()
     month_start = _parse_month(month).isoformat()
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     with get_conn() as conn:
