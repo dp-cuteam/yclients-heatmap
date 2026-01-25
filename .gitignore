@@ -7,3 +7,4 @@ api token.txt
 *.sqlite
 *.db
 !data/historical.db
+Показатели/cuteamdb-*.json
