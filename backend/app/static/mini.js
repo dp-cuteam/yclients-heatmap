@@ -7,7 +7,7 @@
   storageId: null,
   selectedGood: null,
   sessionAdds: [],
-  sendMode: "storage_transaction",
+
   tgUser: null,
 };
 
@@ -33,13 +33,13 @@ const addGoodBtn = document.getElementById("addGoodBtn");
 const basketList = document.getElementById("basketList");
 const undoGoodBtn = document.getElementById("undoGoodBtn");
 const toast = document.getElementById("miniToast");
-const sendModeButtons = document.querySelectorAll("#miniSendMode .mini-toggle-btn");
+
 const miniLogOutput = document.getElementById("miniLogOutput");
 const miniLogCopy = document.getElementById("miniLogCopy");
 const miniLogClear = document.getElementById("miniLogClear");
 
 const RECENT_KEY = "miniRecentGoods";
-const SEND_MODE_KEY = "miniSendMode";
+
 
 const rawBase = document.body?.dataset?.appBase || "";
 const APP_BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
@@ -136,13 +136,7 @@ function setMode(mode) {
   });
 }
 
-function setSendMode(mode) {
-  state.sendMode = mode;
-  localStorage.setItem(SEND_MODE_KEY, mode);
-  sendModeButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.send === mode);
-  });
-}
+
 
 function setBranch(branchId) {
   state.branchId = branchId;
@@ -384,7 +378,7 @@ async function addGoodToRecord() {
       service_id: state.selectedServiceId,
       storage_id: state.storageId,
       tg_user: state.tgUser,
-      mode: state.sendMode || "goods_only",
+
     };
     appendLog({ kind: "request", at: new Date().toISOString(), path: "/api/mini/records/:id/goods", payload });
     const data = await postJSON(`${withBase("/api/mini/records")}/${state.selectedRecord.record_id}/goods`, payload);
@@ -397,7 +391,7 @@ async function addGoodToRecord() {
       unit: state.selectedGood.unit,
       price: added.price ?? state.selectedGood.price,
       goods_transaction_id: added.goods_transaction_id || null,
-      mode: state.sendMode || "goods_only",
+
       time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
     });
     renderBasket();
@@ -461,11 +455,7 @@ toggleButtons.forEach((btn) => {
   });
 });
 
-sendModeButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    setSendMode(btn.dataset.send);
-  });
-});
+
 
 backButton.addEventListener("click", () => showScreen("records"));
 
@@ -509,7 +499,7 @@ if (miniLogClear) {
 async function init() {
   initTelegram();
   setMode(localStorage.getItem("miniMode") || "now");
-  setSendMode(localStorage.getItem(SEND_MODE_KEY) || "storage_transaction");
+
   await loadBranches();
   await loadRecords();
   renderBasket();
