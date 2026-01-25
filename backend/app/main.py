@@ -18,7 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import authenticate, require_admin
 from .config import settings
-from .db import get_conn, init_db, init_historical_db, db_source_label, upsert_sql
+from .db import get_conn, get_hist_conn, init_db, init_historical_db, db_source_label, upsert_sql
 from .etl import run_full_2025, run_daily
 from .groups import load_group_config, ensure_branch_names
 from .historical import (
@@ -1419,10 +1419,32 @@ def api_heatmap_status(branch_id: int, month: str, request: Request):
     }
 
 
+HISTORICAL_RESOURCE_MAP = {
+    "ЗАЛ ВК": "Рабочее место визажиста",
+    "ЗАЛ ПДК": "Рабочее место мастера педикюра",
+    "ЗАЛ МК": "Рабочее место мастера маникюра",
+    "КАБ К/М": "Кабинет косметолога/массажиста",
+    "КАБ ПК": "Кабинет стилиста-парикмахера",
+    "ЗАЛ ПК": "Рабочее место парикмахера",
+}
+
+
+def _map_historical_resource(resource_type: str, branch_name: str | None) -> str | None:
+    key = (resource_type or "").strip()
+    if not key:
+        return None
+    name = branch_name or ""
+    if "Матч Поинт" in name and key in {"ЗАЛ ПК/ВК", "ЗАЛ ПК"}:
+        return "Рабочее место парикмахера"
+    if key == "ЗАЛ ПК/ВК":
+        return "Рабочее место парикмахера"
+    return HISTORICAL_RESOURCE_MAP.get(key)
+
+
 @app.get("/api/heatmap/summary")
 def api_heatmap_summary(
     request: Request,
-    start_year: int = 2023,
+    start_year: int = 2024,
     end_year: int | None = None,
 ):
     if not request.session.get("user"):
@@ -1448,6 +1470,34 @@ def api_heatmap_summary(
     ]
     start_date = date(start_year, 1, 1)
     end_date = date(end_year, 12, 31)
+    start_ym = f"{start_year:04d}-01"
+    end_ym = f"{end_year:04d}-12"
+    hist_end_ym = min(end_ym, "2025-02")
+    hist_values: dict[int, dict[str, dict[str, float]]] = {}
+    if start_ym <= hist_end_ym:
+        init_historical_db()
+        with get_hist_conn() as hist_conn:
+            cur = hist_conn.execute(
+                """
+                SELECT branch_id, month, resource_type, AVG(load_pct) AS avg_load
+                FROM historical_loads
+                WHERE month BETWEEN ? AND ? AND hour BETWEEN 10 AND 21
+                GROUP BY branch_id, month, resource_type
+                """,
+                (start_ym, hist_end_ym),
+            )
+            for row in cur.fetchall():
+                try:
+                    branch_id = int(row["branch_id"])
+                except Exception:
+                    continue
+                month = row["month"]
+                avg = row["avg_load"]
+                if avg is None:
+                    continue
+                hist_values.setdefault(branch_id, {}).setdefault(str(row["resource_type"]), {})[
+                    month
+                ] = round(float(avg), 2)
     config = ensure_branch_names(load_group_config())
     branches_out: list[dict[str, Any]] = []
     with get_conn() as conn:
@@ -1478,6 +1528,21 @@ def api_heatmap_summary(
                         continue
                     values_by_group.setdefault(group_id, {})[ym] = round(float(avg), 2)
             groups = branch.get("groups", [])
+            display_name = branch.get("display_name") or str(branch_id)
+            group_id_by_name = {
+                (g.get("name") or ""): str(g.get("group_id") or "") for g in groups
+            }
+            hist_branch = hist_values.get(branch_id) or {}
+            if hist_branch:
+                for resource_type, month_values in hist_branch.items():
+                    group_name = _map_historical_resource(resource_type, display_name)
+                    if not group_name:
+                        continue
+                    group_id = group_id_by_name.get(group_name)
+                    if not group_id:
+                        continue
+                    for ym, avg in month_values.items():
+                        values_by_group.setdefault(group_id, {})[ym] = avg
             indexed_groups = list(enumerate(groups))
             indexed_groups.sort(key=lambda item: resource_sort_key(item[1].get("name"), item[0]))
             groups_out: list[dict[str, Any]] = []
@@ -1493,10 +1558,26 @@ def api_heatmap_summary(
             branches_out.append(
                 {
                     "branch_id": branch_id,
-                    "display_name": branch.get("display_name") or str(branch_id),
+                    "display_name": display_name,
                     "groups": groups_out,
                 }
             )
+    branch_order = [
+        "Символ",
+        "Матч Поинт (ул. Василисы Кожиной д.13)",
+        "Шелепиха (Шелепихинская набережная, 34к4)",
+        "CUTEAM СПб (м. Чернышевская)",
+        "CUTEAM СПб (м. Чкаловская)",
+    ]
+
+    def branch_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+        name = item.get("display_name") or ""
+        for idx, token in enumerate(branch_order):
+            if token in name:
+                return (0, idx, name)
+        return (1, len(branch_order), name)
+
+    branches_out.sort(key=branch_sort_key)
     return {"years": years, "months": months, "branches": branches_out}
 
 @app.get("/api/summary/month")

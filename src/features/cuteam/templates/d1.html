@@ -28,10 +28,10 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: #fff;
+        background: var(--card);
         border-radius: 999px;
         padding: 6px 12px;
-        border: 1px solid #ece6df;
+        border: 1px solid var(--border-soft);
       }
 
       .pill-dot {
@@ -42,22 +42,22 @@
       }
 
       .pill-week {
-        background: #ffe5d8;
+        background: rgba(217, 154, 131, 0.35);
       }
 
       .pill-month {
-        background: #fff2bf;
+        background: rgba(247, 201, 118, 0.4);
       }
 
       .pill-plan {
-        background: #d6f3e6;
+        background: rgba(233, 189, 166, 0.35);
       }
 
       .d1-scroll {
         overflow: auto;
         border-radius: var(--radius-md);
-        border: 1px solid #ebe5de;
-        background: #fff;
+        border: 1px solid var(--border-soft);
+        background: var(--card);
         max-height: 70vh;
       }
 
@@ -71,8 +71,8 @@
       .d1-table th,
       .d1-table td {
         padding: 8px 10px;
-        border-bottom: 1px solid #f1ebe5;
-        border-right: 1px solid #f1ebe5;
+        border-bottom: 1px solid var(--border-soft);
+        border-right: 1px solid var(--border-soft);
         font-size: 13px;
         text-align: right;
         white-space: nowrap;
@@ -81,7 +81,7 @@
       .d1-table thead th {
         position: sticky;
         top: 0;
-        background: #fffaf5;
+        background: var(--card);
         z-index: 4;
         font-weight: 600;
       }
@@ -100,7 +100,7 @@
       .sticky-col {
         position: sticky;
         left: 0;
-        background: #fff;
+        background: var(--card);
         z-index: 3;
       }
 
@@ -110,30 +110,30 @@
       }
 
       .group-row th {
-        background: #f8efe6;
+        background: rgba(233, 189, 166, 0.3);
         font-weight: 600;
         text-align: left;
-        color: #6f4a3f;
+        color: var(--ink);
       }
 
       .week-total {
-        background: #fff7f0;
+        background: rgba(233, 189, 166, 0.2);
         font-weight: 600;
       }
 
       .month-total {
-        background: #fff4d6;
+        background: rgba(247, 201, 118, 0.35);
         font-weight: 600;
       }
 
       .plan-col {
-        background: #e9f7f0;
+        background: rgba(217, 154, 131, 0.2);
       }
 
       .d1-table td.plan-col input {
         width: 100%;
-        border: 1px solid #cde8da;
-        background: #fff;
+        border: 1px solid var(--border);
+        background: var(--card);
         padding: 6px 8px;
         border-radius: 8px;
         font-size: 12px;
@@ -182,12 +182,12 @@
       }
 
       .delta-positive {
-        color: #2f7d55;
+        color: var(--ink);
         font-weight: 600;
       }
 
       .delta-negative {
-        color: #b2412e;
+        color: var(--accent);
         font-weight: 600;
       }
     </style>
