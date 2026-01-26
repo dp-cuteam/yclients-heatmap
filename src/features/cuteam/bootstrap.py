@@ -38,9 +38,8 @@ def seed_dimensions() -> SeedStats:
         metric_rows.append((code, label, is_derived))
 
     branch_sql = (
-        "INSERT INTO branches (code, name) VALUES (?, ?) ON CONFLICT(code) DO NOTHING"
-        if is_postgres()
-        else "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)"
+        "INSERT INTO branches (code, name) VALUES (?, ?) "
+        "ON CONFLICT(code) DO UPDATE SET name=excluded.name"
     )
     metric_sql = (
         "INSERT INTO metrics (code, label, is_derived) VALUES (?, ?, ?) ON CONFLICT(code) DO NOTHING"

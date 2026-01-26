@@ -457,9 +457,8 @@ def upsert_records(conn: DBConn, records: Sequence[Tuple[str, str, str, float, s
 def seed_dimensions(conn: DBConn) -> None:
     # Branches
     branch_sql = (
-        "INSERT INTO branches (code, name) VALUES (?, ?) ON CONFLICT(code) DO NOTHING"
-        if conn._kind == "postgres"
-        else "INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)"
+        "INSERT INTO branches (code, name) VALUES (?, ?) "
+        "ON CONFLICT(code) DO UPDATE SET name=excluded.name"
     )
     conn.executemany(branch_sql, [(b["code"], b["name"]) for b in reference.BRANCHES])
 

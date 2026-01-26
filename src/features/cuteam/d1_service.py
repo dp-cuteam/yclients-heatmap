@@ -3,10 +3,22 @@ from __future__ import annotations
 import datetime as dt
 import json
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from .db import get_conn, init_schema
 from .metrics import D1_METRICS, GROUP_LABELS, PLAN_METRIC_CODES
 from .settings import settings
+
+
+BRANCH_ORDER = [
+    "Символ (Шоссе Энтузиастов д.3 к. 1)",
+    "Матч Поинт (ул. Василисы Кожиной д.13)",
+    "Шелепиха (Шелепихинская набережная, 34к4)",
+    "CUTEAM СПб (м. Чернышевская)",
+    "CUTEAM СПб (м. Чкаловская)",
+]
+BRANCH_ORDER_INDEX = {name: idx for idx, name in enumerate(BRANCH_ORDER)}
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 def _fallback_branches() -> List[Dict[str, Any]]:
@@ -26,6 +38,23 @@ def _fallback_branches() -> List[Dict[str, Any]]:
     return branches
 
 
+def _branch_name_map() -> Dict[str, str]:
+    path = settings.branch_mapping_path
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    mapping: Dict[str, str] = {}
+    for item in data or []:
+        code = item.get("code")
+        name = item.get("name")
+        if code and name:
+            mapping[code] = name
+    return mapping
+
+
 def list_branches() -> List[Dict[str, Any]]:
     init_schema()
     try:
@@ -33,9 +62,16 @@ def list_branches() -> List[Dict[str, Any]]:
             rows = conn.execute("SELECT code, name FROM branches ORDER BY name").fetchall()
     except Exception:
         return _fallback_branches()
+    name_map = _branch_name_map()
     if not rows:
-        return _fallback_branches()
-    return [{"code": row["code"], "name": row["name"]} for row in rows]
+        branches = _fallback_branches()
+    else:
+        branches = [
+            {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
+            for row in rows
+        ]
+    branches.sort(key=lambda row: (BRANCH_ORDER_INDEX.get(row["name"], 999), row["name"]))
+    return branches
 
 
 def list_months(branch_code: str) -> List[str]:
@@ -48,7 +84,8 @@ def list_months(branch_code: str) -> List[str]:
             "ORDER BY month DESC",
             (branch_code,),
         ).fetchall()
-    return [row["month"] for row in rows]
+    current = dt.datetime.now(MOSCOW_TZ).strftime("%Y-%m")
+    return [row["month"] for row in rows if row["month"] <= current]
 
 
 def _parse_month(value: str) -> dt.date:

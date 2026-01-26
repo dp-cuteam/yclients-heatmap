@@ -116,6 +116,16 @@
         color: var(--ink);
       }
 
+      .group-label {
+        min-width: 300px;
+        text-align: left;
+      }
+
+      .group-fill {
+        background: rgba(233, 189, 166, 0.3);
+        border-bottom: 1px solid var(--border-soft);
+      }
+
       .week-total {
         background: rgba(233, 189, 166, 0.2);
         font-weight: 600;
@@ -474,9 +484,14 @@
             const groupRow = document.createElement("tr");
             groupRow.className = "group-row";
             const th = document.createElement("th");
-            th.colSpan = totalCols;
+            th.colSpan = 2;
+            th.className = "group-label sticky-col";
             th.textContent = groups[metric.group] || metric.group;
             groupRow.appendChild(th);
+            const fill = document.createElement("td");
+            fill.colSpan = totalCols - 2;
+            fill.className = "group-fill";
+            groupRow.appendChild(fill);
             tbody.appendChild(groupRow);
             currentGroup = metric.group;
           }
