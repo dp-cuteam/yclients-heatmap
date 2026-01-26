@@ -357,13 +357,10 @@ def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
     values_map = _fetch_raw_values(branch_code, start_iso, end_iso)
 
     order, labels = _metric_reference()
-    if not order:
-        ordered_codes = sorted(values_map.keys())
-    else:
+    if order:
         ordered_codes = list(order)
-        for code in sorted(values_map.keys()):
-            if code not in ordered_codes:
-                ordered_codes.append(code)
+    else:
+        ordered_codes = sorted(values_map.keys())
 
     if ordered_codes:
         with get_conn() as conn:

@@ -97,10 +97,11 @@
 
       .d1-table th,
       .d1-table td {
-        padding: 8px 10px;
+        padding: 6px 8px;
         border-bottom: 1px solid var(--border-soft);
         border-right: 1px solid var(--border-soft);
-        font-size: 13px;
+        font-size: 12px;
+        line-height: 1.2;
         text-align: right;
         white-space: nowrap;
       }
@@ -109,7 +110,7 @@
         position: sticky;
         top: 0;
         background: var(--card);
-        z-index: 4;
+        z-index: 5;
         font-weight: 600;
       }
 
@@ -128,12 +129,28 @@
         position: sticky;
         left: 0;
         background: var(--card);
-        z-index: 3;
+        z-index: 4;
+        box-shadow: 2px 0 0 var(--border-soft);
       }
 
       .sticky-col.unit-col {
         left: 230px;
-        z-index: 3;
+        z-index: 4;
+      }
+
+      .d1-table thead th.sticky-col {
+        z-index: 7;
+      }
+
+      .raw-table th,
+      .raw-table td {
+        font-size: 11px;
+        padding: 5px 6px;
+      }
+
+      .day-weekend {
+        color: var(--accent);
+        font-weight: 600;
       }
 
       .raw-table th.metric-col {
@@ -261,10 +278,10 @@
           <select id="monthSelect"></select>
         </div>
         <div class="field">
-          <label>Масштаб</label>
+          <label>Свод</label>
           <div class="toggle-group">
-            <label><input type="radio" name="scale" value="days" checked /> Дни</label>
-            <label><input type="radio" name="scale" value="weeks" /> Недели</label>
+            <label><input type="radio" name="scale" value="weeks" checked /> Недели</label>
+            <label><input type="radio" name="scale" value="months" /> Месяц</label>
           </div>
         </div>
         <div class="field">
@@ -290,14 +307,17 @@
         </div>
       </section>
 
-      <div class="legend-row">
-        <div class="legend-pill"><span class="pill-dot pill-week"></span>Итог недели</div>
-        <div class="legend-pill"><span class="pill-dot pill-month"></span>Итог месяца</div>
-        <div class="legend-pill"><span class="pill-dot pill-plan"></span>План</div>
-        <div class="plan-status" id="planStatus"></div>
-      </div>
-
       <section class="cuteam-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Свод</div>
+            <h2 class="card-title">Агрегированные показатели</h2>
+            <div class="card-subtitle">Недельные или месячные значения по выбранному филиалу</div>
+          </div>
+          <div class="card-actions">
+            <div class="plan-status" id="planStatus"></div>
+          </div>
+        </div>
         <div id="tableContainer" class="d1-scroll">
           <div class="empty-state">Загрузка данных…</div>
         </div>
@@ -308,7 +328,7 @@
       const state = {
         branchCode: null,
         month: null,
-        scale: "days",
+        scale: "weeks",
         data: null,
         rawData: null,
       };
@@ -322,7 +342,6 @@
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
 
-      const RUS_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
       function formatNumber(value, decimals = 0) {
         return new Intl.NumberFormat("ru-RU", {
@@ -524,7 +543,10 @@
         let weekIndex = 0;
         days.forEach((day, idx) => {
           const th = document.createElement("th");
-          th.innerHTML = `<div class="day-head"><strong>${String(day.day).padStart(2, "0")}</strong><span>${RUS_DAYS[day.dow]}</span></div>`;
+          th.textContent = String(day.day).padStart(2, "0");
+          if (day.dow === 5 || day.dow === 6) {
+            th.classList.add("day-weekend");
+          }
           headRow.appendChild(th);
 
           if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
@@ -626,14 +648,12 @@
           return;
         }
 
-        const days = data.days || [];
         const weeks = data.weeks || [];
         const metrics = data.metrics || [];
         const groups = data.groups || {};
         const scale = state.scale;
 
-        const totalCols =
-          2 + (scale === "days" ? days.length + weeks.length : weeks.length) + 3;
+        const totalCols = 2 + (scale === "weeks" ? weeks.length : 0) + 3;
 
         const table = document.createElement("table");
         table.className = "d1-table";
@@ -651,22 +671,7 @@
         thUnit.className = "unit-col sticky-col";
         headRow.appendChild(thUnit);
 
-        if (scale === "days") {
-          let weekIndex = 0;
-          days.forEach((day, idx) => {
-            const th = document.createElement("th");
-            th.innerHTML = `<div class="day-head"><strong>${String(day.day).padStart(2, "0")}</strong><span>${RUS_DAYS[day.dow]}</span></div>`;
-            headRow.appendChild(th);
-
-            if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
-              const thWeek = document.createElement("th");
-              thWeek.textContent = "Итог нед.";
-              thWeek.className = "week-total";
-              headRow.appendChild(thWeek);
-              weekIndex += 1;
-            }
-          });
-        } else {
+        if (scale === "weeks") {
           weeks.forEach((week, idx) => {
             const th = document.createElement("th");
             const start = week.start.slice(8, 10);
@@ -733,23 +738,7 @@
           unitCell.className = "unit-col sticky-col";
           row.appendChild(unitCell);
 
-          if (scale === "days") {
-            let weekIndex = 0;
-            metric.values.forEach((value, idx) => {
-              const td = document.createElement("td");
-              td.textContent = formatValue(value, metric.unit);
-              row.appendChild(td);
-
-              if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
-                const weekTd = document.createElement("td");
-                weekTd.className = "week-total";
-                const weekValue = metric.week_totals[weekIndex];
-                weekTd.textContent = formatValue(weekValue, metric.unit);
-                row.appendChild(weekTd);
-                weekIndex += 1;
-              }
-            });
-          } else {
+          if (scale === "weeks") {
             metric.week_totals.forEach((value) => {
               const td = document.createElement("td");
               td.className = "week-total";
