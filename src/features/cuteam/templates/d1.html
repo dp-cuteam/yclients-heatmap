@@ -41,6 +41,11 @@
         flex-wrap: wrap;
       }
 
+      .copy-status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
       .legend-row {
         display: flex;
         flex-wrap: wrap;
@@ -151,6 +156,28 @@
       .day-weekend {
         color: var(--accent);
         font-weight: 600;
+      }
+
+      .compare-table th.metric-col {
+        min-width: 240px;
+      }
+
+      .year-table th.metric-col {
+        min-width: 220px;
+      }
+
+      .year-table th.year-head {
+        text-align: center;
+      }
+
+      .year-table th.month-head {
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .year-table td.plan-col input {
+        width: 100%;
+        min-width: 70px;
       }
 
       .raw-table th.metric-col {
@@ -278,6 +305,10 @@
           <select id="monthSelect"></select>
         </div>
         <div class="field">
+          <label>Месяц сравнения</label>
+          <select id="compareMonthSelect"></select>
+        </div>
+        <div class="field">
           <label>Свод</label>
           <div class="toggle-group">
             <label><input type="radio" name="scale" value="weeks" checked /> Недели</label>
@@ -315,10 +346,46 @@
             <div class="card-subtitle">Недельные или месячные значения по выбранному филиалу</div>
           </div>
           <div class="card-actions">
+            <button class="ghost" id="summaryCopyBtn" type="button">Скопировать TSV</button>
+            <div class="copy-status" id="summaryCopyStatus"></div>
             <div class="plan-status" id="planStatus"></div>
           </div>
         </div>
         <div id="tableContainer" class="d1-scroll">
+          <div class="empty-state">Загрузка данных…</div>
+        </div>
+      </section>
+
+      <section class="cuteam-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Сравнение</div>
+            <h2 class="card-title">Сравнение месяцев</h2>
+            <div class="card-subtitle">Основной месяц vs месяц сравнения</div>
+          </div>
+          <div class="card-actions">
+            <button class="ghost" id="compareCopyBtn" type="button">Скопировать TSV</button>
+            <div class="copy-status" id="compareCopyStatus"></div>
+          </div>
+        </div>
+        <div id="compareTableContainer" class="d1-scroll">
+          <div class="empty-state">Загрузка данных…</div>
+        </div>
+      </section>
+
+      <section class="cuteam-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Годовая сводка</div>
+            <h2 class="card-title">План / факт по месяцам</h2>
+            <div class="card-subtitle">Ключевые направления по годам и месяцам</div>
+          </div>
+          <div class="card-actions">
+            <button class="ghost" id="yearCopyBtn" type="button">Скопировать TSV</button>
+            <div class="copy-status" id="yearCopyStatus"></div>
+          </div>
+        </div>
+        <div id="yearTableContainer" class="d1-scroll">
           <div class="empty-state">Загрузка данных…</div>
         </div>
       </section>
@@ -328,17 +395,29 @@
       const state = {
         branchCode: null,
         month: null,
+        compareMonth: null,
         scale: "weeks",
         data: null,
         rawData: null,
+        compareData: null,
+        yearData: null,
       };
 
       const branchSelect = document.getElementById("branchSelect");
       const monthSelect = document.getElementById("monthSelect");
+      const compareMonthSelect = document.getElementById("compareMonthSelect");
       const tableContainer = document.getElementById("tableContainer");
       const rawTableContainer = document.getElementById("rawTableContainer");
       const rawCopyBtn = document.getElementById("rawCopyBtn");
       const rawCopyStatus = document.getElementById("rawCopyStatus");
+      const summaryCopyBtn = document.getElementById("summaryCopyBtn");
+      const summaryCopyStatus = document.getElementById("summaryCopyStatus");
+      const compareTableContainer = document.getElementById("compareTableContainer");
+      const compareCopyBtn = document.getElementById("compareCopyBtn");
+      const compareCopyStatus = document.getElementById("compareCopyStatus");
+      const yearTableContainer = document.getElementById("yearTableContainer");
+      const yearCopyBtn = document.getElementById("yearCopyBtn");
+      const yearCopyStatus = document.getElementById("yearCopyStatus");
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
 
@@ -464,6 +543,54 @@
         }
       }
 
+      function buildSummaryTSV() {
+        if (!state.data || !state.data.metrics) return "";
+        const weeks = state.data.weeks || [];
+        const metrics = state.data.metrics || [];
+        const scale = state.scale;
+
+        const header = ["Показатель", "Ед."];
+        if (scale === "weeks") {
+          weeks.forEach((week, idx) => {
+            const start = week.start.slice(8, 10);
+            const end = week.end.slice(8, 10);
+            header.push(`Нед ${idx + 1} (${start}-${end})`);
+          });
+        }
+        header.push("Итого месяц", "План месяц", "Факт vs План");
+
+        const lines = [header.join("\t")];
+        metrics.forEach((metric) => {
+          const row = [metric.label, metric.unit];
+          if (scale === "weeks") {
+            metric.week_totals.forEach((value) => {
+              row.push(tsvValue(value));
+            });
+          }
+          row.push(tsvValue(metric.month_total));
+          row.push(metric.plan_enabled ? tsvValue(metric.plan ?? "") : "");
+          row.push(formatPlanSummary(metric.plan_pct, metric.plan_delta));
+          lines.push(row.join("\t"));
+        });
+        return lines.join("\n");
+      }
+
+      async function copySummaryTSV() {
+        const tsv = buildSummaryTSV();
+        if (!tsv) {
+          summaryCopyStatus.textContent = "Нет данных";
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(tsv);
+          summaryCopyStatus.textContent = "Скопировано";
+          setTimeout(() => (summaryCopyStatus.textContent = ""), 2400);
+        } catch (err) {
+          summaryCopyStatus.textContent = "Не удалось";
+          setTimeout(() => (summaryCopyStatus.textContent = ""), 2400);
+        }
+      }
+
       async function fetchJSON(url) {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Ошибка запроса: ${res.status}`);
@@ -493,20 +620,35 @@
         const data = await fetchJSON(`/api/cuteam/months?branch_code=${encodeURIComponent(state.branchCode)}`);
         const months = data.months || [];
         monthSelect.innerHTML = "";
+        compareMonthSelect.innerHTML = "";
         if (months.length === 0) {
           state.month = null;
+          state.compareMonth = null;
           monthSelect.disabled = true;
+          compareMonthSelect.disabled = true;
           return;
         }
         monthSelect.disabled = false;
+        compareMonthSelect.disabled = false;
         months.forEach((month) => {
           const opt = document.createElement("option");
           opt.value = month;
           opt.textContent = formatMonthLabel(month);
           monthSelect.appendChild(opt);
         });
+        months.forEach((month) => {
+          const opt = document.createElement("option");
+          opt.value = month;
+          opt.textContent = formatMonthLabel(month);
+          compareMonthSelect.appendChild(opt);
+        });
         if (months.length > 0) {
           state.month = months[0];
+        }
+        if (months.length > 1) {
+          state.compareMonth = months[1];
+        } else {
+          state.compareMonth = months[0];
         }
       }
 
@@ -605,10 +747,358 @@
         rawTableContainer.appendChild(table);
       }
 
-      async function savePlan(metricCode, value) {
+      function buildComparisonTable(base, compare) {
+        if (!base || !compare || !base.metrics) {
+          compareTableContainer.innerHTML = '<div class="empty-state">Нет данных для сравнения.</div>';
+          return;
+        }
+
+        const metrics = base.metrics || [];
+        const groups = base.groups || {};
+        const compareMap = new Map((compare.metrics || []).map((m) => [m.code, m]));
+
+        const table = document.createElement("table");
+        table.className = "d1-table compare-table";
+
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+
+        const thMetric = document.createElement("th");
+        thMetric.textContent = "Показатель";
+        thMetric.className = "metric-col sticky-col";
+        headRow.appendChild(thMetric);
+
+        const thUnit = document.createElement("th");
+        thUnit.textContent = "Ед.";
+        thUnit.className = "unit-col sticky-col";
+        headRow.appendChild(thUnit);
+
+        const thA = document.createElement("th");
+        thA.textContent = formatMonthLabel(base.month);
+        headRow.appendChild(thA);
+
+        const thB = document.createElement("th");
+        thB.textContent = formatMonthLabel(compare.month);
+        headRow.appendChild(thB);
+
+        const thDelta = document.createElement("th");
+        thDelta.textContent = "Δ";
+        headRow.appendChild(thDelta);
+
+        const thDeltaPct = document.createElement("th");
+        thDeltaPct.textContent = "Δ%";
+        headRow.appendChild(thDeltaPct);
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        let currentGroup = null;
+
+        metrics.forEach((metric) => {
+          if (metric.group !== currentGroup) {
+            const groupRow = document.createElement("tr");
+            groupRow.className = "group-row";
+            const th = document.createElement("th");
+            th.colSpan = 6;
+            th.className = "group-label sticky-col";
+            th.textContent = groups[metric.group] || metric.group;
+            groupRow.appendChild(th);
+            tbody.appendChild(groupRow);
+            currentGroup = metric.group;
+          }
+
+          const row = document.createElement("tr");
+          const nameCell = document.createElement("th");
+          nameCell.textContent = metric.label;
+          nameCell.className = "metric-col sticky-col";
+          row.appendChild(nameCell);
+
+          const unitCell = document.createElement("td");
+          unitCell.textContent =
+            metric.unit === "rub"
+              ? "руб"
+              : metric.unit === "qty"
+              ? "шт"
+              : metric.unit === "pct"
+              ? "%"
+              : metric.unit;
+          unitCell.className = "unit-col sticky-col";
+          row.appendChild(unitCell);
+
+          const compareMetric = compareMap.get(metric.code);
+          const valueA = metric.month_total;
+          const valueB = compareMetric ? compareMetric.month_total : null;
+          const delta = valueA !== null && valueB !== null ? valueA - valueB : null;
+          const deltaPct =
+            valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
+
+          const tdA = document.createElement("td");
+          tdA.textContent = formatValue(valueA, metric.unit);
+          row.appendChild(tdA);
+
+          const tdB = document.createElement("td");
+          tdB.textContent = formatValue(valueB, metric.unit);
+          row.appendChild(tdB);
+
+          const tdDelta = document.createElement("td");
+          tdDelta.textContent = formatValue(delta, metric.unit);
+          if (delta !== null) tdDelta.classList.add(delta >= 0 ? "delta-positive" : "delta-negative");
+          row.appendChild(tdDelta);
+
+          const tdDeltaPct = document.createElement("td");
+          tdDeltaPct.textContent = deltaPct !== null ? `${formatNumber(deltaPct, 1)}%` : "";
+          if (deltaPct !== null) tdDeltaPct.classList.add(deltaPct >= 0 ? "delta-positive" : "delta-negative");
+          row.appendChild(tdDeltaPct);
+
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        compareTableContainer.innerHTML = "";
+        compareTableContainer.appendChild(table);
+      }
+
+      function buildComparisonTSV(base, compare) {
+        if (!base || !compare || !base.metrics) return "";
+        const metrics = base.metrics || [];
+        const compareMap = new Map((compare.metrics || []).map((m) => [m.code, m]));
+        const header = [
+          "Показатель",
+          "Ед.",
+          formatMonthLabel(base.month),
+          formatMonthLabel(compare.month),
+          "Δ",
+          "Δ%",
+        ];
+        const lines = [header.join("\t")];
+        metrics.forEach((metric) => {
+          const compareMetric = compareMap.get(metric.code);
+          const valueA = metric.month_total;
+          const valueB = compareMetric ? compareMetric.month_total : null;
+          const delta = valueA !== null && valueB !== null ? valueA - valueB : null;
+          const deltaPct =
+            valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
+          lines.push(
+            [
+              metric.label,
+              metric.unit,
+              tsvValue(valueA),
+              tsvValue(valueB),
+              tsvValue(delta),
+              deltaPct !== null ? deltaPct.toFixed(2) : "",
+            ].join("\t")
+          );
+        });
+        return lines.join("\n");
+      }
+
+      async function copyCompareTSV() {
+        if (!state.compareData) {
+          compareCopyStatus.textContent = "Нет данных";
+          return;
+        }
+        const tsv = buildComparisonTSV(state.compareData.base, state.compareData.compare);
+        if (!tsv) {
+          compareCopyStatus.textContent = "Нет данных";
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(tsv);
+          compareCopyStatus.textContent = "Скопировано";
+          setTimeout(() => (compareCopyStatus.textContent = ""), 2400);
+        } catch (err) {
+          compareCopyStatus.textContent = "Не удалось";
+          setTimeout(() => (compareCopyStatus.textContent = ""), 2400);
+        }
+      }
+
+      function buildYearTable(data) {
+        if (!data || !data.metrics || data.metrics.length === 0) {
+          yearTableContainer.innerHTML = '<div class="empty-state">Нет данных для годовой сводки.</div>';
+          return;
+        }
+
+        const years = data.years || [];
+        const months = data.months || [];
+        const groups = data.groups || [];
+        const metrics = data.metrics || [];
+        const planYear = data.plan_year;
+
+        const monthLabels = {
+          "01": "Янв",
+          "02": "Фев",
+          "03": "Мар",
+          "04": "Апр",
+          "05": "Май",
+          "06": "Июн",
+          "07": "Июл",
+          "08": "Авг",
+          "09": "Сен",
+          "10": "Окт",
+          "11": "Ноя",
+          "12": "Дек",
+        };
+
+        const table = document.createElement("table");
+        table.className = "d1-table year-table";
+
+        const thead = document.createElement("thead");
+        const headRow1 = document.createElement("tr");
+
+        const thMetric = document.createElement("th");
+        thMetric.textContent = "Показатель";
+        thMetric.className = "metric-col sticky-col";
+        headRow1.appendChild(thMetric);
+
+        years.forEach((year) => {
+          const th = document.createElement("th");
+          th.className = "year-head";
+          th.colSpan = 12;
+          th.textContent = String(year);
+          headRow1.appendChild(th);
+        });
+
+        const headRow2 = document.createElement("tr");
+        const thEmpty = document.createElement("th");
+        thEmpty.className = "metric-col sticky-col";
+        headRow2.appendChild(thEmpty);
+
+        months.forEach((month) => {
+          const m = month.slice(5, 7);
+          const th = document.createElement("th");
+          th.className = "month-head";
+          th.textContent = monthLabels[m] || m;
+          headRow2.appendChild(th);
+        });
+
+        thead.appendChild(headRow1);
+        thead.appendChild(headRow2);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+
+        const metricMap = new Map(metrics.map((m) => [m.code, m]));
+
+        groups.forEach((group) => {
+          const groupRow = document.createElement("tr");
+          groupRow.className = "group-row";
+          const th = document.createElement("th");
+          th.colSpan = months.length + 1;
+          th.className = "group-label sticky-col";
+          th.textContent = group.label;
+          groupRow.appendChild(th);
+          tbody.appendChild(groupRow);
+
+          group.metrics.forEach((code) => {
+            const metric = metricMap.get(code);
+            if (!metric) return;
+
+            const factRow = document.createElement("tr");
+            const factLabel = document.createElement("th");
+            factLabel.textContent = metric.label;
+            factLabel.className = "metric-col sticky-col";
+            factRow.appendChild(factLabel);
+            months.forEach((month) => {
+              const td = document.createElement("td");
+              td.textContent = formatRawValue(metric.fact[month]);
+              factRow.appendChild(td);
+            });
+            tbody.appendChild(factRow);
+
+            const planRow = document.createElement("tr");
+            const planLabel = document.createElement("th");
+            planLabel.textContent = `План ${planYear}`;
+            planLabel.className = "metric-col sticky-col";
+            planRow.appendChild(planLabel);
+            months.forEach((month) => {
+              const td = document.createElement("td");
+              td.className = "plan-col";
+              if (month.startsWith(String(planYear))) {
+                const input = document.createElement("input");
+                input.type = "number";
+                input.step = "0.01";
+                input.value = metric.plan[month] ?? "";
+                input.addEventListener("blur", async (event) => {
+                  const nextValue = Number(event.target.value || 0);
+                  try {
+                    await savePlan(metric.code, nextValue, month);
+                    updateYearPlanLocal(metric.code, month, nextValue);
+                    if (state.month === month) {
+                      updatePlanLocal(metric.code, nextValue);
+                      buildTable(state.data);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                });
+                input.addEventListener("keydown", (event) => {
+                  if (event.key === "Enter") event.target.blur();
+                });
+                td.appendChild(input);
+              }
+              planRow.appendChild(td);
+            });
+            tbody.appendChild(planRow);
+          });
+        });
+
+        table.appendChild(tbody);
+        yearTableContainer.innerHTML = "";
+        yearTableContainer.appendChild(table);
+      }
+
+      function buildYearTSV(data) {
+        if (!data || !data.metrics) return "";
+        const months = data.months || [];
+        const groups = data.groups || [];
+        const metrics = data.metrics || [];
+        const planYear = data.plan_year;
+        const metricMap = new Map(metrics.map((m) => [m.code, m]));
+
+        const header = ["Показатель", ...months];
+        const lines = [header.join("\t")];
+        groups.forEach((group) => {
+          lines.push([group.label].join("\t"));
+          group.metrics.forEach((code) => {
+            const metric = metricMap.get(code);
+            if (!metric) return;
+            const factRow = [metric.label, ...months.map((m) => tsvValue(metric.fact[m]))];
+            lines.push(factRow.join("\t"));
+            const planRow = [
+              `План ${planYear}`,
+              ...months.map((m) => (m.startsWith(String(planYear)) ? tsvValue(metric.plan[m]) : "")),
+            ];
+            lines.push(planRow.join("\t"));
+          });
+        });
+        return lines.join("\n");
+      }
+
+      async function copyYearTSV() {
+        if (!state.yearData) {
+          yearCopyStatus.textContent = "Нет данных";
+          return;
+        }
+        const tsv = buildYearTSV(state.yearData);
+        if (!tsv) {
+          yearCopyStatus.textContent = "Нет данных";
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(tsv);
+          yearCopyStatus.textContent = "Скопировано";
+          setTimeout(() => (yearCopyStatus.textContent = ""), 2400);
+        } catch (err) {
+          yearCopyStatus.textContent = "Не удалось";
+          setTimeout(() => (yearCopyStatus.textContent = ""), 2400);
+        }
+      }
+
+      async function savePlan(metricCode, value, monthValue) {
         const payload = {
           branch_code: state.branchCode,
-          month: state.month,
+          month: monthValue || state.month,
           metric_code: metricCode,
           value: value,
         };
@@ -638,6 +1128,15 @@
               metric.plan_pct = null;
               metric.plan_delta = null;
             }
+          }
+        });
+      }
+
+      function updateYearPlanLocal(metricCode, month, value) {
+        if (!state.yearData || !state.yearData.metrics) return;
+        state.yearData.metrics.forEach((metric) => {
+          if (metric.code === metricCode) {
+            metric.plan[month] = value;
           }
         });
       }
@@ -763,7 +1262,7 @@
             input.addEventListener("blur", async (event) => {
               const nextValue = Number(event.target.value || 0);
               try {
-                await savePlan(metric.code, nextValue);
+                await savePlan(metric.code, nextValue, state.month);
                 updatePlanLocal(metric.code, nextValue);
                 setPlanStatus("План сохранён");
                 buildTable(state.data);
@@ -837,24 +1336,82 @@
         }
       }
 
+      async function loadComparison() {
+        if (!state.branchCode || !state.month || !state.compareMonth) {
+          compareTableContainer.innerHTML = '<div class="empty-state">Нет данных для сравнения.</div>';
+          return;
+        }
+        compareTableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
+        try {
+          const base =
+            state.data && state.data.month === state.month
+              ? state.data
+              : await fetchJSON(
+                  `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
+                    state.month
+                  )}`
+                );
+          const compare = await fetchJSON(
+            `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
+              state.compareMonth
+            )}`
+          );
+          state.compareData = { base, compare };
+          buildComparisonTable(base, compare);
+        } catch (err) {
+          console.error(err);
+          compareTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить данные.</div>';
+        }
+      }
+
+      async function loadYearSummary() {
+        if (!state.branchCode) return;
+        yearTableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
+        try {
+          const data = await fetchJSON(
+            `/api/cuteam/year-summary?branch_code=${encodeURIComponent(state.branchCode)}`
+          );
+          state.yearData = data;
+          buildYearTable(data);
+        } catch (err) {
+          console.error(err);
+          yearTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить данные.</div>';
+        }
+      }
+
       async function loadData() {
-        await Promise.all([loadSummary(), loadRaw()]);
+        await Promise.all([loadSummary(), loadRaw(), loadComparison(), loadYearSummary()]);
       }
 
       rawCopyBtn.addEventListener("click", () => {
         copyRawTSV();
+      });
+      summaryCopyBtn.addEventListener("click", () => {
+        copySummaryTSV();
+      });
+      compareCopyBtn.addEventListener("click", () => {
+        copyCompareTSV();
+      });
+      yearCopyBtn.addEventListener("click", () => {
+        copyYearTSV();
       });
 
       branchSelect.addEventListener("change", async (event) => {
         state.branchCode = event.target.value;
         await loadMonths();
         monthSelect.value = state.month;
+        compareMonthSelect.value = state.compareMonth;
         loadData();
       });
 
       monthSelect.addEventListener("change", (event) => {
         state.month = event.target.value;
         loadData();
+      });
+
+      compareMonthSelect.addEventListener("change", (event) => {
+        state.compareMonth = event.target.value;
+        loadComparison();
       });
 
       document.querySelectorAll('input[name="scale"]').forEach((radio) => {
@@ -870,15 +1427,20 @@
           if (!state.branchCode) {
             tableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
             rawTableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
+            compareTableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
+            yearTableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
             return;
           }
           await loadMonths();
           monthSelect.value = state.month;
+          compareMonthSelect.value = state.compareMonth;
           await loadData();
         } catch (err) {
           console.error(err);
           tableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
           rawTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
+          compareTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
+          yearTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
         }
       })();
     </script>

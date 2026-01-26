@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, HTTPException, Query
 
-from .d1_service import build_d1_payload, build_raw_payload, list_branches, list_months, upsert_plan
+from .d1_service import (
+    build_d1_payload,
+    build_raw_payload,
+    build_year_summary_payload,
+    list_branches,
+    list_months,
+    upsert_plan,
+)
 
 
 router = APIRouter(prefix="/api/cuteam", tags=["cuteam"])
@@ -29,6 +36,14 @@ def api_d1(branch_code: str = Query(..., min_length=1), month: str = Query(..., 
 @router.get("/raw")
 def api_raw(branch_code: str = Query(..., min_length=1), month: str = Query(..., min_length=7)):
     payload = build_raw_payload(branch_code, month)
+    if not payload.get("branch"):
+        raise HTTPException(status_code=404, detail="Branch not found")
+    return payload
+
+
+@router.get("/year-summary")
+def api_year_summary(branch_code: str = Query(..., min_length=1)):
+    payload = build_year_summary_payload(branch_code)
     if not payload.get("branch"):
         raise HTTPException(status_code=404, detail="Branch not found")
     return payload

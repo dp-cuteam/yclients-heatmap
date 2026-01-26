@@ -20,6 +20,29 @@ BRANCH_ORDER = [
 BRANCH_ORDER_INDEX = {name: idx for idx, name in enumerate(BRANCH_ORDER)}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 AVG_HINTS = ("percent", "ratio", "share")
+YEAR_METRIC_CODES = [
+    "revenue_total",
+    "revenue_open_space",
+    "revenue_cabinets",
+    "revenue_lab",
+    "revenue_retail",
+    "revenue_salon",
+    "coffee_revenue_total",
+]
+YEAR_GROUPS = [
+    {"label": "Итого", "metrics": ["revenue_total"]},
+    {
+        "label": "Коворкинг",
+        "metrics": [
+            "revenue_open_space",
+            "revenue_cabinets",
+            "revenue_lab",
+            "revenue_retail",
+            "revenue_salon",
+        ],
+    },
+    {"label": "Кофейня", "metrics": ["coffee_revenue_total"]},
+]
 
 
 def _fallback_branches() -> List[Dict[str, Any]]:
@@ -407,6 +430,90 @@ def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
         ],
         "weeks": week_chunks,
         "metrics": metrics_payload,
+    }
+
+
+def _fetch_year_facts(branch_code: str) -> Dict[str, Dict[str, float]]:
+    if not YEAR_METRIC_CODES:
+        return {}
+    placeholders = ", ".join("?" for _ in YEAR_METRIC_CODES)
+    sql = (
+        "SELECT metric_code, substr(date, 1, 7) AS month, SUM(value) AS total "
+        "FROM manual_sheet_daily "
+        "WHERE branch_code = ? "
+        f"AND metric_code IN ({placeholders}) "
+        "GROUP BY metric_code, month"
+    )
+    params = [branch_code, *YEAR_METRIC_CODES]
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    result: Dict[str, Dict[str, float]] = {code: {} for code in YEAR_METRIC_CODES}
+    for row in rows:
+        result.setdefault(row["metric_code"], {})[row["month"]] = float(row["total"])
+    return result
+
+
+def _fetch_year_plans(branch_code: str) -> Dict[str, Dict[str, float]]:
+    if not YEAR_METRIC_CODES:
+        return {}
+    placeholders = ", ".join("?" for _ in YEAR_METRIC_CODES)
+    sql = (
+        "SELECT metric_code, substr(month_start, 1, 7) AS month, value "
+        "FROM plans_monthly "
+        "WHERE branch_code = ? "
+        f"AND metric_code IN ({placeholders})"
+    )
+    params = [branch_code, *YEAR_METRIC_CODES]
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    result: Dict[str, Dict[str, float]] = {code: {} for code in YEAR_METRIC_CODES}
+    for row in rows:
+        result.setdefault(row["metric_code"], {})[row["month"]] = float(row["value"])
+    return result
+
+
+def _year_range_from_months(months: List[str]) -> List[int]:
+    if not months:
+        current_year = dt.datetime.now(MOSCOW_TZ).year
+        return [current_year]
+    years = sorted({int(m[:4]) for m in months})
+    current_year = dt.datetime.now(MOSCOW_TZ).year
+    start_year = min(years[0], current_year)
+    end_year = max(years[-1], current_year)
+    return list(range(start_year, end_year + 1))
+
+
+def build_year_summary_payload(branch_code: str) -> Dict[str, Any]:
+    init_schema()
+    facts = _fetch_year_facts(branch_code)
+    plans = _fetch_year_plans(branch_code)
+
+    fact_months = {m for metric in facts.values() for m in metric.keys()}
+    plan_months = {m for metric in plans.values() for m in metric.keys()}
+    months_all = sorted(fact_months | plan_months)
+    years = _year_range_from_months(months_all)
+    months = [f"{year:04d}-{month:02d}" for year in years for month in range(1, 13)]
+    plan_year = dt.datetime.now(MOSCOW_TZ).year
+
+    _, labels = _metric_reference()
+    metrics_payload = []
+    for code in YEAR_METRIC_CODES:
+        metrics_payload.append(
+            {
+                "code": code,
+                "label": labels.get(code, code),
+                "fact": facts.get(code, {}),
+                "plan": plans.get(code, {}),
+            }
+        )
+
+    return {
+        "branch": _fetch_branch(branch_code),
+        "years": years,
+        "months": months,
+        "groups": YEAR_GROUPS,
+        "metrics": metrics_payload,
+        "plan_year": plan_year,
     }
 
 
