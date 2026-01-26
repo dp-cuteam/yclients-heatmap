@@ -268,13 +268,65 @@
       }
 
       .delta-positive {
-        color: var(--ink);
+        color: #1f5e46;
         font-weight: 600;
       }
 
       .delta-negative {
-        color: var(--accent);
+        color: #8b1e1e;
         font-weight: 600;
+      }
+
+      .raw-header {
+        font-weight: 700;
+      }
+
+      .fact-above {
+        color: #1f5e46;
+        font-weight: 600;
+      }
+
+      .fact-below {
+        color: #8b1e1e;
+        font-weight: 600;
+      }
+
+      .section-divider {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--ink);
+        opacity: 0.2;
+        margin: 28px 0 18px;
+      }
+
+      .overview-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .overview-item {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        padding: 14px;
+      }
+
+      .overview-item h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+      }
+
+      .overview-item p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      @media (min-width: 960px) {
+        .overview-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
     </style>
   </head>
@@ -309,7 +361,7 @@
           <select id="compareMonthSelect"></select>
         </div>
         <div class="field">
-          <label>Свод</label>
+          <label>Сравнение</label>
           <div class="toggle-group">
             <label><input type="radio" name="scale" value="weeks" checked /> Недели</label>
             <label><input type="radio" name="scale" value="months" /> Месяц</label>
@@ -342,8 +394,8 @@
         <div class="card-head">
           <div>
             <div class="eyebrow">Свод</div>
-            <h2 class="card-title">Агрегированные показатели</h2>
-            <div class="card-subtitle">Недельные или месячные значения по выбранному филиалу</div>
+            <h2 class="card-title">Агрегированные показатели в динамике</h2>
+            <div class="card-subtitle">Недели предыдущего месяца (5 недель)</div>
           </div>
           <div class="card-actions">
             <button class="ghost" id="summaryCopyBtn" type="button">Скопировать TSV</button>
@@ -389,12 +441,71 @@
           <div class="empty-state">Загрузка данных…</div>
         </div>
       </section>
+
+      <div class="section-divider"></div>
+
+      <section class="cuteam-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">NEW Overview</div>
+            <h2 class="card-title">NEW Overview</h2>
+            <div class="card-subtitle">Структура будущих дашбордов и KPI</div>
+          </div>
+        </div>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <h3>1. Главный управленческий дашборд</h3>
+            <p>KPI: выручка всего, коворкинг всего, кофейня всего (checks + avg check), загрузка, порча (writeoff rate).</p>
+          </div>
+          <div class="overview-item">
+            <h3>2. Доходы в целом</h3>
+            <p>Динамика выручки + сравнение периодов (WoW, YoY, лучший период), структура наличные/безнал.</p>
+          </div>
+          <div class="overview-item">
+            <h3>3. Коворкинг: доходы по направлениям</h3>
+            <p>Направления аренда/кабинеты/лекторий/лаборатория/ритейл/салон + ratio лаборатория/аренда.</p>
+          </div>
+          <div class="overview-item">
+            <h3>4. Кофейня: основные показатели</h3>
+            <p>Выручка, чеки, средний чек + сравнение WoW/YoY и среднее за 8 недель.</p>
+          </div>
+          <div class="overview-item">
+            <h3>5. Кофейня: структура продаж</h3>
+            <p>Еда и напитки по категориям, структура недели, сезонность.</p>
+          </div>
+          <div class="overview-item">
+            <h3>6. Загрузка и эффективность</h3>
+            <p>Связь загрузки с выручкой (open space, лаборатория, кофейня) + revenue per load.</p>
+          </div>
+          <div class="overview-item">
+            <h3>7. Списания и порча</h3>
+            <p>sold_food_total vs written_off_food_total и writeoff_rate относительно нормы.</p>
+          </div>
+          <div class="overview-item">
+            <h3>8. Деньги и касса</h3>
+            <p>Наличные/безнал, остаток кассы, изъятия, внесения + контроль движения.</p>
+          </div>
+          <div class="overview-item">
+            <h3>9. Расходы</h3>
+            <p>Все основные расходы, структура по категориям, доля от выручки.</p>
+          </div>
+          <div class="overview-item">
+            <h3>10. Прибыль и рентабельность</h3>
+            <p>Gross/operating profit и маржинальность по неделям.</p>
+          </div>
+          <div class="overview-item">
+            <h3>11. Сигналы и контроль</h3>
+            <p>Автоматические алерты по доходам, кофейне, загрузке, кассе и расходам.</p>
+          </div>
+        </div>
+      </section>
     </div>
 
     <script>
       const state = {
         branchCode: null,
         month: null,
+        summaryMonth: null,
         compareMonth: null,
         scale: "weeks",
         data: null,
@@ -450,6 +561,20 @@
         if (value === null || value === undefined) return "";
         const decimals = Math.abs(value % 1) > 0.01 ? 2 : 0;
         return formatNumber(value, decimals);
+      }
+
+      function formatSigned(value) {
+        if (value === null || value === undefined) return "";
+        if (value === 0) return "0";
+        const sign = value > 0 ? "+" : "-";
+        return `${sign}${formatRawValue(Math.abs(value))}`;
+      }
+
+      function formatSignedPercent(value) {
+        if (value === null || value === undefined) return "";
+        if (value === 0) return "0%";
+        const sign = value > 0 ? "+" : "-";
+        return `${sign}${formatNumber(Math.abs(value), 1)}%`;
       }
 
       function formatPlanSummary(planPct, planDelta) {
@@ -546,11 +671,15 @@
       function buildSummaryTSV() {
         if (!state.data || !state.data.metrics) return "";
         const weeks = state.data.weeks || [];
+        const weekLabels = state.data.week_labels || [];
         const metrics = state.data.metrics || [];
-        const scale = state.scale;
 
         const header = ["Показатель", "Ед."];
-        if (scale === "weeks") {
+        if (weekLabels.length) {
+          weekLabels.forEach((label) => {
+            header.push(label);
+          });
+        } else {
           weeks.forEach((week, idx) => {
             const start = week.start.slice(8, 10);
             const end = week.end.slice(8, 10);
@@ -562,11 +691,9 @@
         const lines = [header.join("\t")];
         metrics.forEach((metric) => {
           const row = [metric.label, metric.unit];
-          if (scale === "weeks") {
-            metric.week_totals.forEach((value) => {
-              row.push(tsvValue(value));
-            });
-          }
+          metric.week_totals.forEach((value) => {
+            row.push(tsvValue(value));
+          });
           row.push(tsvValue(metric.month_total));
           row.push(metric.plan_enabled ? tsvValue(metric.plan ?? "") : "");
           row.push(formatPlanSummary(metric.plan_pct, metric.plan_delta));
@@ -714,6 +841,9 @@
           const nameCell = document.createElement("th");
           nameCell.textContent = metric.label;
           nameCell.className = "metric-col sticky-col";
+          if (metric.is_header) {
+            nameCell.classList.add("raw-header");
+          }
           row.appendChild(nameCell);
 
           let idx = 0;
@@ -749,12 +879,11 @@
 
       function buildComparisonTable(base, compare) {
         if (!base || !compare || !base.metrics) {
-          compareTableContainer.innerHTML = '<div class="empty-state">Нет данных для сравнения.</div>';
+          compareTableContainer.innerHTML = '<div class="empty-state">??? ?????? ??? ?????????.</div>';
           return;
         }
 
         const metrics = base.metrics || [];
-        const groups = base.groups || {};
         const compareMap = new Map((compare.metrics || []).map((m) => [m.code, m]));
 
         const table = document.createElement("table");
@@ -764,14 +893,9 @@
         const headRow = document.createElement("tr");
 
         const thMetric = document.createElement("th");
-        thMetric.textContent = "Показатель";
+        thMetric.textContent = "??????????";
         thMetric.className = "metric-col sticky-col";
         headRow.appendChild(thMetric);
-
-        const thUnit = document.createElement("th");
-        thUnit.textContent = "Ед.";
-        thUnit.className = "unit-col sticky-col";
-        headRow.appendChild(thUnit);
 
         const thA = document.createElement("th");
         thA.textContent = formatMonthLabel(base.month);
@@ -782,49 +906,27 @@
         headRow.appendChild(thB);
 
         const thDelta = document.createElement("th");
-        thDelta.textContent = "Δ";
+        thDelta.textContent = "?";
         headRow.appendChild(thDelta);
 
         const thDeltaPct = document.createElement("th");
-        thDeltaPct.textContent = "Δ%";
+        thDeltaPct.textContent = "?%";
         headRow.appendChild(thDeltaPct);
 
         thead.appendChild(headRow);
         table.appendChild(thead);
 
         const tbody = document.createElement("tbody");
-        let currentGroup = null;
 
         metrics.forEach((metric) => {
-          if (metric.group !== currentGroup) {
-            const groupRow = document.createElement("tr");
-            groupRow.className = "group-row";
-            const th = document.createElement("th");
-            th.colSpan = 6;
-            th.className = "group-label sticky-col";
-            th.textContent = groups[metric.group] || metric.group;
-            groupRow.appendChild(th);
-            tbody.appendChild(groupRow);
-            currentGroup = metric.group;
-          }
-
           const row = document.createElement("tr");
           const nameCell = document.createElement("th");
           nameCell.textContent = metric.label;
           nameCell.className = "metric-col sticky-col";
+          if (metric.is_header) {
+            nameCell.classList.add("raw-header");
+          }
           row.appendChild(nameCell);
-
-          const unitCell = document.createElement("td");
-          unitCell.textContent =
-            metric.unit === "rub"
-              ? "руб"
-              : metric.unit === "qty"
-              ? "шт"
-              : metric.unit === "pct"
-              ? "%"
-              : metric.unit;
-          unitCell.className = "unit-col sticky-col";
-          row.appendChild(unitCell);
 
           const compareMetric = compareMap.get(metric.code);
           const valueA = metric.month_total;
@@ -834,21 +936,22 @@
             valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
 
           const tdA = document.createElement("td");
-          tdA.textContent = formatValue(valueA, metric.unit);
+          tdA.textContent = formatRawValue(valueA);
           row.appendChild(tdA);
 
           const tdB = document.createElement("td");
-          tdB.textContent = formatValue(valueB, metric.unit);
+          tdB.textContent = formatRawValue(valueB);
           row.appendChild(tdB);
 
           const tdDelta = document.createElement("td");
-          tdDelta.textContent = formatValue(delta, metric.unit);
+          tdDelta.textContent = formatSigned(delta);
           if (delta !== null) tdDelta.classList.add(delta >= 0 ? "delta-positive" : "delta-negative");
           row.appendChild(tdDelta);
 
           const tdDeltaPct = document.createElement("td");
-          tdDeltaPct.textContent = deltaPct !== null ? `${formatNumber(deltaPct, 1)}%` : "";
-          if (deltaPct !== null) tdDeltaPct.classList.add(deltaPct >= 0 ? "delta-positive" : "delta-negative");
+          tdDeltaPct.textContent = formatSignedPercent(deltaPct);
+          if (deltaPct !== null)
+            tdDeltaPct.classList.add(deltaPct >= 0 ? "delta-positive" : "delta-negative");
           row.appendChild(tdDeltaPct);
 
           tbody.appendChild(row);
@@ -864,14 +967,13 @@
         const metrics = base.metrics || [];
         const compareMap = new Map((compare.metrics || []).map((m) => [m.code, m]));
         const header = [
-          "Показатель",
-          "Ед.",
+          "??????????",
           formatMonthLabel(base.month),
           formatMonthLabel(compare.month),
-          "Δ",
-          "Δ%",
+          "?",
+          "?%",
         ];
-        const lines = [header.join("\t")];
+        const lines = [header.join("	")];
         metrics.forEach((metric) => {
           const compareMetric = compareMap.get(metric.code);
           const valueA = metric.month_total;
@@ -879,18 +981,24 @@
           const delta = valueA !== null && valueB !== null ? valueA - valueB : null;
           const deltaPct =
             valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
+          const deltaValue =
+            delta !== null ? (delta > 0 ? `+${delta}` : String(delta)) : "";
+          const deltaPctValue =
+            deltaPct !== null
+              ? `${deltaPct > 0 ? "+" : ""}${deltaPct.toFixed(2)}`
+              : "";
           lines.push(
             [
               metric.label,
-              metric.unit,
               tsvValue(valueA),
               tsvValue(valueB),
-              tsvValue(delta),
-              deltaPct !== null ? deltaPct.toFixed(2) : "",
-            ].join("\t")
+              deltaValue,
+              deltaPctValue,
+            ].join("	")
           );
         });
-        return lines.join("\n");
+        return lines.join("
+");
       }
 
       async function copyCompareTSV() {
@@ -915,65 +1023,50 @@
 
       function buildYearTable(data) {
         if (!data || !data.metrics || data.metrics.length === 0) {
-          yearTableContainer.innerHTML = '<div class="empty-state">Нет данных для годовой сводки.</div>';
+          yearTableContainer.innerHTML = '<div class="empty-state">??? ?????? ??? ??????? ??????.</div>';
           return;
         }
 
-        const years = data.years || [];
         const months = data.months || [];
         const groups = data.groups || [];
         const metrics = data.metrics || [];
-        const planYear = data.plan_year;
 
         const monthLabels = {
-          "01": "Янв",
-          "02": "Фев",
-          "03": "Мар",
-          "04": "Апр",
-          "05": "Май",
-          "06": "Июн",
-          "07": "Июл",
-          "08": "Авг",
-          "09": "Сен",
-          "10": "Окт",
-          "11": "Ноя",
-          "12": "Дек",
+          "01": "???",
+          "02": "???",
+          "03": "???",
+          "04": "???",
+          "05": "???",
+          "06": "???",
+          "07": "???",
+          "08": "???",
+          "09": "???",
+          "10": "???",
+          "11": "???",
+          "12": "???",
         };
 
         const table = document.createElement("table");
         table.className = "d1-table year-table";
 
         const thead = document.createElement("thead");
-        const headRow1 = document.createElement("tr");
+        const headRow = document.createElement("tr");
 
         const thMetric = document.createElement("th");
-        thMetric.textContent = "Показатель";
+        thMetric.textContent = "??????????";
         thMetric.className = "metric-col sticky-col";
-        headRow1.appendChild(thMetric);
-
-        years.forEach((year) => {
-          const th = document.createElement("th");
-          th.className = "year-head";
-          th.colSpan = 12;
-          th.textContent = String(year);
-          headRow1.appendChild(th);
-        });
-
-        const headRow2 = document.createElement("tr");
-        const thEmpty = document.createElement("th");
-        thEmpty.className = "metric-col sticky-col";
-        headRow2.appendChild(thEmpty);
+        headRow.appendChild(thMetric);
 
         months.forEach((month) => {
           const m = month.slice(5, 7);
+          const y = month.slice(2, 4);
           const th = document.createElement("th");
           th.className = "month-head";
-          th.textContent = monthLabels[m] || m;
-          headRow2.appendChild(th);
+          th.textContent = `${monthLabels[m] || m} ${y}`;
+          headRow.appendChild(th);
         });
 
-        thead.appendChild(headRow1);
-        thead.appendChild(headRow2);
+        thead.appendChild(headRow);
         table.appendChild(thead);
 
         const tbody = document.createElement("tbody");
@@ -994,6 +1087,39 @@
             const metric = metricMap.get(code);
             if (!metric) return;
 
+            const planRow = document.createElement("tr");
+            const planLabel = document.createElement("th");
+            planLabel.textContent = "????";
+            planLabel.className = "metric-col sticky-col";
+            planRow.appendChild(planLabel);
+            months.forEach((month) => {
+              const td = document.createElement("td");
+              td.className = "plan-col";
+              const input = document.createElement("input");
+              input.type = "number";
+              input.step = "0.01";
+              input.value = metric.plan[month] ?? "";
+              input.addEventListener("blur", async (event) => {
+                const nextValue = Number(event.target.value || 0);
+                try {
+                  await savePlan(metric.code, nextValue, month);
+                  updateYearPlanLocal(metric.code, month, nextValue);
+                  if (state.summaryMonth === month) {
+                    updatePlanLocal(metric.code, nextValue);
+                    buildTable(state.data);
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
+              });
+              input.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") event.target.blur();
+              });
+              td.appendChild(input);
+              planRow.appendChild(td);
+            });
+            tbody.appendChild(planRow);
+
             const factRow = document.createElement("tr");
             const factLabel = document.createElement("th");
             factLabel.textContent = metric.label;
@@ -1001,45 +1127,20 @@
             factRow.appendChild(factLabel);
             months.forEach((month) => {
               const td = document.createElement("td");
-              td.textContent = formatRawValue(metric.fact[month]);
+              const factValue = metric.fact[month];
+              const planValue = metric.plan[month];
+              td.textContent = formatRawValue(factValue);
+              if (
+                planValue !== null &&
+                planValue !== undefined &&
+                factValue !== null &&
+                factValue !== undefined
+              ) {
+                td.classList.add(factValue >= planValue ? "fact-above" : "fact-below");
+              }
               factRow.appendChild(td);
             });
             tbody.appendChild(factRow);
-
-            const planRow = document.createElement("tr");
-            const planLabel = document.createElement("th");
-            planLabel.textContent = `План ${planYear}`;
-            planLabel.className = "metric-col sticky-col";
-            planRow.appendChild(planLabel);
-            months.forEach((month) => {
-              const td = document.createElement("td");
-              td.className = "plan-col";
-              if (month.startsWith(String(planYear))) {
-                const input = document.createElement("input");
-                input.type = "number";
-                input.step = "0.01";
-                input.value = metric.plan[month] ?? "";
-                input.addEventListener("blur", async (event) => {
-                  const nextValue = Number(event.target.value || 0);
-                  try {
-                    await savePlan(metric.code, nextValue, month);
-                    updateYearPlanLocal(metric.code, month, nextValue);
-                    if (state.month === month) {
-                      updatePlanLocal(metric.code, nextValue);
-                      buildTable(state.data);
-                    }
-                  } catch (err) {
-                    console.error(err);
-                  }
-                });
-                input.addEventListener("keydown", (event) => {
-                  if (event.key === "Enter") event.target.blur();
-                });
-                td.appendChild(input);
-              }
-              planRow.appendChild(td);
-            });
-            tbody.appendChild(planRow);
           });
         });
 
@@ -1053,26 +1154,44 @@
         const months = data.months || [];
         const groups = data.groups || [];
         const metrics = data.metrics || [];
-        const planYear = data.plan_year;
         const metricMap = new Map(metrics.map((m) => [m.code, m]));
 
-        const header = ["Показатель", ...months];
-        const lines = [header.join("\t")];
+        const monthLabels = {
+          "01": "???",
+          "02": "???",
+          "03": "???",
+          "04": "???",
+          "05": "???",
+          "06": "???",
+          "07": "???",
+          "08": "???",
+          "09": "???",
+          "10": "???",
+          "11": "???",
+          "12": "???",
+        };
+        const header = [
+          "??????????",
+          ...months.map((month) => {
+            const m = month.slice(5, 7);
+            const y = month.slice(2, 4);
+            return `${monthLabels[m] || m} ${y}`;
+          }),
+        ];
+        const lines = [header.join("	")];
         groups.forEach((group) => {
-          lines.push([group.label].join("\t"));
+          lines.push([group.label].join("	"));
           group.metrics.forEach((code) => {
             const metric = metricMap.get(code);
             if (!metric) return;
+            const planRow = ["????", ...months.map((m) => tsvValue(metric.plan[m]))];
+            lines.push(planRow.join("	"));
             const factRow = [metric.label, ...months.map((m) => tsvValue(metric.fact[m]))];
-            lines.push(factRow.join("\t"));
-            const planRow = [
-              `План ${planYear}`,
-              ...months.map((m) => (m.startsWith(String(planYear)) ? tsvValue(metric.plan[m]) : "")),
-            ];
-            lines.push(planRow.join("\t"));
+            lines.push(factRow.join("	"));
           });
         });
-        return lines.join("\n");
+        return lines.join("
+");
       }
 
       async function copyYearTSV() {
@@ -1148,11 +1267,12 @@
         }
 
         const weeks = data.weeks || [];
+        const weekLabels = data.week_labels || [];
         const metrics = data.metrics || [];
         const groups = data.groups || {};
-        const scale = state.scale;
 
-        const totalCols = 2 + (scale === "weeks" ? weeks.length : 0) + 3;
+        const weekCount = weekLabels.length || weeks.length;
+        const totalCols = 2 + weekCount + 3;
 
         const table = document.createElement("table");
         table.className = "d1-table";
@@ -1170,7 +1290,14 @@
         thUnit.className = "unit-col sticky-col";
         headRow.appendChild(thUnit);
 
-        if (scale === "weeks") {
+        if (weekLabels.length) {
+          weekLabels.forEach((label) => {
+            const th = document.createElement("th");
+            th.textContent = label;
+            th.className = "week-total";
+            headRow.appendChild(th);
+          });
+        } else {
           weeks.forEach((week, idx) => {
             const th = document.createElement("th");
             const start = week.start.slice(8, 10);
@@ -1237,14 +1364,12 @@
           unitCell.className = "unit-col sticky-col";
           row.appendChild(unitCell);
 
-          if (scale === "weeks") {
-            metric.week_totals.forEach((value) => {
-              const td = document.createElement("td");
-              td.className = "week-total";
-              td.textContent = formatValue(value, metric.unit);
-              row.appendChild(td);
-            });
-          }
+          metric.week_totals.forEach((value) => {
+            const td = document.createElement("td");
+            td.className = "week-total";
+            td.textContent = formatValue(value, metric.unit);
+            row.appendChild(td);
+          });
 
           const monthTd = document.createElement("td");
           monthTd.className = "month-total";
@@ -1262,7 +1387,7 @@
             input.addEventListener("blur", async (event) => {
               const nextValue = Number(event.target.value || 0);
               try {
-                await savePlan(metric.code, nextValue, state.month);
+                await savePlan(metric.code, nextValue, state.summaryMonth || state.month);
                 updatePlanLocal(metric.code, nextValue);
                 setPlanStatus("План сохранён");
                 buildTable(state.data);
@@ -1310,6 +1435,7 @@
             `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(state.month)}`
           );
           state.data = data;
+          state.summaryMonth = data.month;
           buildTable(data);
         } catch (err) {
           console.error(err);
@@ -1344,15 +1470,15 @@
         compareTableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
         try {
           const base =
-            state.data && state.data.month === state.month
-              ? state.data
+            state.rawData && state.rawData.month === state.month
+              ? state.rawData
               : await fetchJSON(
-                  `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
+                  `/api/cuteam/raw?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
                     state.month
                   )}`
                 );
           const compare = await fetchJSON(
-            `/api/cuteam/d1?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
+            `/api/cuteam/raw?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
               state.compareMonth
             )}`
           );
@@ -1417,7 +1543,6 @@
       document.querySelectorAll('input[name="scale"]').forEach((radio) => {
         radio.addEventListener("change", (event) => {
           state.scale = event.target.value;
-          buildTable(state.data);
         });
       });
 

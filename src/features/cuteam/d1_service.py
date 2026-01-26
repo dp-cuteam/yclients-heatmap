@@ -20,10 +20,12 @@ BRANCH_ORDER = [
 BRANCH_ORDER_INDEX = {name: idx for idx, name in enumerate(BRANCH_ORDER)}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 AVG_HINTS = ("percent", "ratio", "share")
+IGNORE_BRANCH_CODES = {"SUM", "\u0421\u0423\u041c"}
 YEAR_METRIC_CODES = [
     "revenue_total",
     "revenue_open_space",
     "revenue_cabinets",
+    "revenue_lecture",
     "revenue_lab",
     "revenue_retail",
     "revenue_salon",
@@ -36,6 +38,7 @@ YEAR_GROUPS = [
         "metrics": [
             "revenue_open_space",
             "revenue_cabinets",
+            "revenue_lecture",
             "revenue_lab",
             "revenue_retail",
             "revenue_salon",
@@ -44,6 +47,47 @@ YEAR_GROUPS = [
     {"label": "Кофейня", "metrics": ["coffee_revenue_total"]},
 ]
 
+RAW_ORDER = [
+    {"code": "revenue_total", "label": "Выручка", "header": True},
+    {"code": "revenue_cashless", "label": "из них безналичные"},
+    {"code": "revenue_cash", "label": "из них наличные"},
+    {"code": "cash_balance_end_day", "label": "остаток наличных на конец дня"},
+    {"code": "revenue_open_space", "label": "Аренда"},
+    {"code": "revenue_cabinets", "label": "Кабинеты"},
+    {"code": "revenue_lecture", "label": "Лекторий"},
+    {"code": "revenue_lab", "label": "Лаборатория"},
+    {"code": "revenue_retail", "label": "Ритейл"},
+    {"code": "revenue_salon", "label": "Услуги салона"},
+    {"code": "load_percent", "label": "Загрузка%"},
+    {"code": "coffee_revenue_total", "label": "Кофейня", "header": True},
+    {"code": "coffee_checks", "label": "Чеки"},
+    {"code": "sold_food_total", "label": "Еда", "header": True},
+    {"code": "revenue_desserts", "label": "Десерты"},
+    {"code": "revenue_food_breakfast", "label": "Еда завтраки"},
+    {"code": "revenue_food_lunch", "label": "Еда обеды"},
+    {"code": "revenue_food_croissants", "label": "Круассаны"},
+    {"code": "revenue_food_salads", "label": "Салаты"},
+    {"code": "revenue_food_sandwiches", "label": "Сэндвичи"},
+    {"code": "revenue_drinks_total", "label": "Напитки", "header": True},
+    {"code": "revenue_coffee", "label": "Кофе"},
+    {"code": "revenue_coffee_hot", "label": "Кофе/чай/какао"},
+    {"code": "revenue_drinks_cold", "label": "Напитки ритейл"},
+    {"code": "revenue_drinks_seasonal", "label": "Сезонные напитки"},
+    {"code": "written_off_food_total", "label": "Порча", "header": True},
+    {"code": "withdrawals_total", "label": "Изъятия", "header": True},
+    {"code": "expense_cleaning_salary", "label": "ЗП клининг"},
+    {"code": "expense_staff_salary", "label": "ЗП персонал"},
+    {"code": "expense_maintenance", "label": "Текущий ремонт"},
+    {"code": "expense_facility", "label": "Содержание помещения"},
+    {"code": "expense_delivery_taxi", "label": "Курьер, доставка, такси"},
+    {"code": "expense_food_purchase", "label": "Закупка продуктов"},
+    {"code": "expense_marketing", "label": "Расходы на маркетинг"},
+    {"code": "expense_hiring", "label": "Расходы на найм"},
+    {"code": "expense_cash_collection", "label": "Инкассация"},
+    {"code": "expense_other", "label": "Прочее"},
+    {"code": "deposit_total", "label": "Внесения", "header": True},
+]
+RAW_HEADER_CODES = {item["code"] for item in RAW_ORDER if item.get("header")}
 
 def _fallback_branches() -> List[Dict[str, Any]]:
     path = settings.branch_mapping_path
@@ -126,6 +170,12 @@ def list_branches() -> List[Dict[str, Any]]:
             {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
             for row in rows
         ]
+    branches = [
+        branch
+        for branch in branches
+        if branch.get("code") not in IGNORE_BRANCH_CODES
+        and branch.get("name") not in IGNORE_BRANCH_CODES
+    ]
     branches.sort(key=lambda row: (BRANCH_ORDER_INDEX.get(row["name"], 999), row["name"]))
     return branches
 
@@ -181,6 +231,12 @@ def _week_chunks(days: List[dt.date]) -> List[Dict[str, Any]]:
             )
             start_idx = idx + 1
     return weeks
+
+
+def _prev_month_start(month_start: dt.date) -> dt.date:
+    if month_start.month == 1:
+        return dt.date(month_start.year - 1, 12, 1)
+    return dt.date(month_start.year, month_start.month - 1, 1)
 
 
 def _sum(values: List[Optional[float]]) -> Optional[float]:
@@ -248,6 +304,8 @@ def _fetch_plans(branch_code: str, month_start: str) -> Dict[str, float]:
 
 
 def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
+    if branch_code in IGNORE_BRANCH_CODES:
+        return None
     name_map = _branch_name_map()
     with get_conn() as conn:
         row = conn.execute(
@@ -261,19 +319,38 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
-    month_start = _parse_month(month)
-    days = _month_days(month_start)
+    base_month_start = _parse_month(month)
+    summary_month_start = _prev_month_start(base_month_start)
+    days = _month_days(summary_month_start)
     if not days:
         return {"branch": None, "month": month, "days": [], "weeks": [], "metrics": []}
 
+    week_chunks = _week_chunks(days)
+    if len(week_chunks) > 5:
+        week_chunks = week_chunks[-5:]
+    week_ranges = [
+        {
+            "start": days[chunk["start_idx"]].isoformat(),
+            "end": days[chunk["end_idx"]].isoformat(),
+        }
+        for chunk in week_chunks
+    ]
+    pad_count = max(0, 5 - len(week_ranges))
+    week_labels: List[str] = []
+    for idx in range(5):
+        label_idx = 5 - idx
+        if idx < pad_count:
+            week_labels.append(f"Нед -{label_idx} ()")
+        else:
+            week = week_ranges[idx - pad_count]
+            start = dt.date.fromisoformat(week["start"])
+            end = dt.date.fromisoformat(week["end"])
+            week_labels.append(f"Нед -{label_idx} ({start:%d.%m}–{end:%d.%m})")
+
     start_iso = days[0].isoformat()
     end_iso = days[-1].isoformat()
-    week_chunks = _week_chunks(days)
     daily_values = _fetch_daily_values(branch_code, start_iso, end_iso)
-    plans = _fetch_plans(branch_code, month_start.isoformat())
-
-    revenue_daily = daily_values.get("coffee_revenue_total", {})
-    checks_daily = daily_values.get("coffee_checks", {})
+    plans = _fetch_plans(branch_code, summary_month_start.isoformat())
 
     metrics_payload: List[Dict[str, Any]] = []
     for metric in D1_METRICS:
@@ -282,52 +359,14 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
             values_map.get(day.isoformat()) for day in days
         ]
 
-        if metric.derived and metric.code == "avg_check":
-            day_values = []
-            for day in days:
-                rev = revenue_daily.get(day.isoformat())
-                checks = checks_daily.get(day.isoformat())
-                if rev is None or checks in (None, 0):
-                    day_values.append(None)
-                else:
-                    day_values.append(float(rev) / float(checks))
-
         week_totals: List[Optional[float]] = []
         for chunk in week_chunks:
             slice_values = day_values[chunk["start_idx"] : chunk["end_idx"] + 1]
-            if metric.unit == "pct":
-                week_totals.append(_avg(slice_values))
-            elif metric.code == "avg_check":
-                rev_sum = _sum(
-                    [
-                        revenue_daily.get(days[idx].isoformat())
-                        for idx in range(chunk["start_idx"], chunk["end_idx"] + 1)
-                    ]
-                )
-                checks_sum = _sum(
-                    [
-                        checks_daily.get(days[idx].isoformat())
-                        for idx in range(chunk["start_idx"], chunk["end_idx"] + 1)
-                    ]
-                )
-                if rev_sum is None or not checks_sum:
-                    week_totals.append(None)
-                else:
-                    week_totals.append(float(rev_sum) / float(checks_sum))
-            else:
-                week_totals.append(_sum(slice_values))
+            week_totals.append(_sum(slice_values))
+        if pad_count:
+            week_totals = [None] * pad_count + week_totals
 
-        if metric.unit == "pct":
-            month_total = _avg(day_values)
-        elif metric.code == "avg_check":
-            rev_sum = _sum([revenue_daily.get(day.isoformat()) for day in days])
-            checks_sum = _sum([checks_daily.get(day.isoformat()) for day in days])
-            if rev_sum is None or not checks_sum:
-                month_total = None
-            else:
-                month_total = float(rev_sum) / float(checks_sum)
-        else:
-            month_total = _sum(day_values)
+        month_total = _sum(day_values)
 
         plan_value = plans.get(metric.code) if metric.plan else None
         plan_pct = None
@@ -356,12 +395,13 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
 
     return {
         "branch": _fetch_branch(branch_code),
-        "month": month,
+        "month": summary_month_start.strftime("%Y-%m"),
         "days": [
             {"date": day.isoformat(), "day": day.day, "dow": day.weekday()}
             for day in days
         ],
-        "weeks": week_chunks,
+        "weeks": week_ranges,
+        "week_labels": week_labels,
         "groups": GROUP_LABELS,
         "metrics": metrics_payload,
     }
@@ -379,28 +419,10 @@ def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
     week_chunks = _week_chunks(days)
     values_map = _fetch_raw_values(branch_code, start_iso, end_iso)
 
-    order, labels = _metric_reference()
-    if order:
-        ordered_codes = list(order)
-    else:
-        ordered_codes = sorted(values_map.keys())
-
-    if ordered_codes:
-        with get_conn() as conn:
-            rows = conn.execute(
-                "SELECT code, label FROM metrics WHERE code IN ({})".format(
-                    ", ".join("?" for _ in ordered_codes)
-                ),
-                ordered_codes,
-            ).fetchall()
-        for row in rows:
-            code = row["code"]
-            label = row["label"]
-            if code not in labels and label:
-                labels[code] = label
-
     metrics_payload: List[Dict[str, Any]] = []
-    for code in ordered_codes:
+    for item in RAW_ORDER:
+        code = item["code"]
+        label = item["label"]
         values = values_map.get(code, {})
         day_values: List[Optional[float]] = [values.get(day.isoformat()) for day in days]
         week_totals: List[Optional[float]] = []
@@ -414,10 +436,11 @@ def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
         metrics_payload.append(
             {
                 "code": code,
-                "label": labels.get(code, code),
+                "label": label,
                 "values": day_values,
                 "week_totals": week_totals,
                 "month_total": month_total,
+                "is_header": code in RAW_HEADER_CODES,
             }
         )
 
@@ -530,3 +553,4 @@ def upsert_plan(branch_code: str, month: str, metric_code: str, value: float) ->
             (branch_code, metric_code, month_start, float(value), now),
         )
         conn.commit()
+
