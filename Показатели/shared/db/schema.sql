@@ -1,4 +1,4 @@
--- Base schema for SQLite/DuckDB (portable subset; adjust types for Postgres later).
+-- Base schema for SQLite/DuckDB (portable subset, adjust types for Postgres later).
 
 CREATE TABLE IF NOT EXISTS branches (
     code TEXT PRIMARY KEY,
