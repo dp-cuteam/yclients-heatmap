@@ -417,7 +417,14 @@ def iter_records(
 
 
 def _split_sql_statements(sql: str) -> List[str]:
-    parts = [chunk.strip() for chunk in sql.split(";")]
+    # Drop line comments so ";" inside comments doesn't break splitting.
+    lines = []
+    for line in sql.splitlines():
+        if line.lstrip().startswith("--"):
+            continue
+        lines.append(line)
+    cleaned = "\n".join(lines)
+    parts = [chunk.strip() for chunk in cleaned.split(";")]
     return [part for part in parts if part]
 
 
