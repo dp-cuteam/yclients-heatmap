@@ -19,6 +19,7 @@ BRANCH_ORDER = [
 ]
 BRANCH_ORDER_INDEX = {name: idx for idx, name in enumerate(BRANCH_ORDER)}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
+AVG_HINTS = ("percent", "ratio", "share")
 
 
 def _fallback_branches() -> List[Dict[str, Any]]:
@@ -53,6 +54,38 @@ def _branch_name_map() -> Dict[str, str]:
         if code and name:
             mapping[code] = name
     return mapping
+
+
+def _metric_reference() -> tuple[List[str], Dict[str, str]]:
+    path = settings.metric_mapping_path
+    if not path.exists():
+        return [], {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], {}
+    order: List[str] = []
+    labels: Dict[str, str] = {}
+    for item in data or []:
+        code = item.get("metric_code")
+        if not code:
+            continue
+        label = item.get("label")
+        if label and code not in labels:
+            labels[code] = label
+        source = (item.get("source") or "").strip().lower()
+        if source and source != "manual":
+            continue
+        if code not in order:
+            order.append(code)
+    return order, labels
+
+
+def _is_avg_metric(code: str) -> bool:
+    lowered = code.lower()
+    if lowered.endswith("_pct") or lowered.endswith("_percent"):
+        return True
+    return any(hint in lowered for hint in AVG_HINTS)
 
 
 def list_branches() -> List[Dict[str, Any]]:
@@ -161,6 +194,21 @@ def _fetch_daily_values(
     return values
 
 
+def _fetch_raw_values(branch_code: str, start_date: str, end_date: str) -> Dict[str, Dict[str, float]]:
+    sql = (
+        "SELECT metric_code, date, value "
+        "FROM manual_sheet_daily "
+        "WHERE branch_code = ? AND date >= ? AND date <= ?"
+    )
+    params = [branch_code, start_date, end_date]
+    values: Dict[str, Dict[str, float]] = {}
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    for row in rows:
+        values.setdefault(row["metric_code"], {})[row["date"]] = float(row["value"])
+    return values
+
+
 def _fetch_plans(branch_code: str, month_start: str) -> Dict[str, float]:
     if not PLAN_METRIC_CODES:
         return {}
@@ -177,6 +225,7 @@ def _fetch_plans(branch_code: str, month_start: str) -> Dict[str, float]:
 
 
 def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
+    name_map = _branch_name_map()
     with get_conn() as conn:
         row = conn.execute(
             "SELECT code, name FROM branches WHERE code = ?",
@@ -184,7 +233,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
         ).fetchone()
     if not row:
         return None
-    return {"code": row["code"], "name": row["name"]}
+    return {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
 
 
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
@@ -291,6 +340,75 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         ],
         "weeks": week_chunks,
         "groups": GROUP_LABELS,
+        "metrics": metrics_payload,
+    }
+
+
+def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
+    init_schema()
+    month_start = _parse_month(month)
+    days = _month_days(month_start)
+    if not days:
+        return {"branch": None, "month": month, "days": [], "weeks": [], "metrics": []}
+
+    start_iso = days[0].isoformat()
+    end_iso = days[-1].isoformat()
+    week_chunks = _week_chunks(days)
+    values_map = _fetch_raw_values(branch_code, start_iso, end_iso)
+
+    order, labels = _metric_reference()
+    if not order:
+        ordered_codes = sorted(values_map.keys())
+    else:
+        ordered_codes = list(order)
+        for code in sorted(values_map.keys()):
+            if code not in ordered_codes:
+                ordered_codes.append(code)
+
+    if ordered_codes:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT code, label FROM metrics WHERE code IN ({})".format(
+                    ", ".join("?" for _ in ordered_codes)
+                ),
+                ordered_codes,
+            ).fetchall()
+        for row in rows:
+            code = row["code"]
+            label = row["label"]
+            if code not in labels and label:
+                labels[code] = label
+
+    metrics_payload: List[Dict[str, Any]] = []
+    for code in ordered_codes:
+        values = values_map.get(code, {})
+        day_values: List[Optional[float]] = [values.get(day.isoformat()) for day in days]
+        week_totals: List[Optional[float]] = []
+        for chunk in week_chunks:
+            slice_values = day_values[chunk["start_idx"] : chunk["end_idx"] + 1]
+            if _is_avg_metric(code):
+                week_totals.append(_avg(slice_values))
+            else:
+                week_totals.append(_sum(slice_values))
+        month_total = _avg(day_values) if _is_avg_metric(code) else _sum(day_values)
+        metrics_payload.append(
+            {
+                "code": code,
+                "label": labels.get(code, code),
+                "values": day_values,
+                "week_totals": week_totals,
+                "month_total": month_total,
+            }
+        )
+
+    return {
+        "branch": _fetch_branch(branch_code),
+        "month": month,
+        "days": [
+            {"date": day.isoformat(), "day": day.day, "dow": day.weekday()}
+            for day in days
+        ],
+        "weeks": week_chunks,
         "metrics": metrics_payload,
     }
 

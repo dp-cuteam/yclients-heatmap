@@ -14,6 +14,33 @@
         margin-top: 20px;
       }
 
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .card-title {
+        margin: 6px 0 0;
+        font-size: 18px;
+      }
+
+      .card-subtitle {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .card-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
       .legend-row {
         display: flex;
         flex-wrap: wrap;
@@ -107,6 +134,11 @@
       .sticky-col.unit-col {
         left: 230px;
         z-index: 3;
+      }
+
+      .raw-table th.metric-col {
+        min-width: 280px;
+        max-width: 320px;
       }
 
       .group-row th {
@@ -241,6 +273,23 @@
         </div>
       </section>
 
+      <section class="cuteam-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Сырой месяц</div>
+            <h2 class="card-title">Исходные данные по дням</h2>
+            <div class="card-subtitle">Полная таблица из Google Sheet (без сравнений)</div>
+          </div>
+          <div class="card-actions">
+            <button class="ghost" id="rawCopyBtn" type="button">Скопировать TSV</button>
+            <div class="plan-status" id="rawCopyStatus"></div>
+          </div>
+        </div>
+        <div id="rawTableContainer" class="d1-scroll">
+          <div class="empty-state">Загрузка данных…</div>
+        </div>
+      </section>
+
       <div class="legend-row">
         <div class="legend-pill"><span class="pill-dot pill-week"></span>Итог недели</div>
         <div class="legend-pill"><span class="pill-dot pill-month"></span>Итог месяца</div>
@@ -261,11 +310,15 @@
         month: null,
         scale: "days",
         data: null,
+        rawData: null,
       };
 
       const branchSelect = document.getElementById("branchSelect");
       const monthSelect = document.getElementById("monthSelect");
       const tableContainer = document.getElementById("tableContainer");
+      const rawTableContainer = document.getElementById("rawTableContainer");
+      const rawCopyBtn = document.getElementById("rawCopyBtn");
+      const rawCopyStatus = document.getElementById("rawCopyStatus");
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
 
@@ -295,6 +348,12 @@
         return formatNumber(value, 0);
       }
 
+      function formatRawValue(value) {
+        if (value === null || value === undefined) return "";
+        const decimals = Math.abs(value % 1) > 0.01 ? 2 : 0;
+        return formatNumber(value, decimals);
+      }
+
       function formatPlanSummary(planPct, planDelta) {
         if (planPct === null || planPct === undefined) return "";
         const pct = `${formatNumber(planPct, 0)}%`;
@@ -307,6 +366,83 @@
         const [year, month] = isoMonth.split("-");
         const date = new Date(Number(year), Number(month) - 1, 1);
         return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(date);
+      }
+
+      function setCopyStatus(message, isError = false) {
+        rawCopyStatus.textContent = message || "";
+        if (!message) return;
+        rawCopyStatus.style.color = isError ? "#b2412e" : "#2f7d55";
+        setTimeout(() => {
+          if (rawCopyStatus.textContent === message) rawCopyStatus.textContent = "";
+        }, 2400);
+      }
+
+      function tsvValue(value) {
+        if (value === null || value === undefined) return "";
+        if (Number.isNaN(value)) return "";
+        return String(value);
+      }
+
+      function buildRawTSV(data) {
+        const days = data.days || [];
+        const weeks = data.weeks || [];
+        const metrics = data.metrics || [];
+
+        const header = ["Показатель"];
+        let weekIndex = 0;
+        days.forEach((day, idx) => {
+          header.push(String(day.day).padStart(2, "0"));
+          if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+            header.push("Итог нед.");
+            weekIndex += 1;
+          }
+        });
+        header.push("Итого месяц");
+
+        const lines = [header.join("\t")];
+        metrics.forEach((metric) => {
+          const row = [metric.label];
+          let idx = 0;
+          weekIndex = 0;
+          metric.values.forEach((value) => {
+            row.push(tsvValue(value));
+            if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+              row.push(tsvValue(metric.week_totals[weekIndex]));
+              weekIndex += 1;
+            }
+            idx += 1;
+          });
+          row.push(tsvValue(metric.month_total));
+          lines.push(row.join("\t"));
+        });
+        return lines.join("\n");
+      }
+
+      async function copyRawTSV() {
+        if (!state.rawData || !state.rawData.metrics || state.rawData.metrics.length === 0) {
+          setCopyStatus("Нет данных для копирования", true);
+          return;
+        }
+        const tsv = buildRawTSV(state.rawData);
+        try {
+          await navigator.clipboard.writeText(tsv);
+          setCopyStatus("Скопировано");
+        } catch (err) {
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = tsv;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+            setCopyStatus("Скопировано");
+          } catch (fallbackErr) {
+            console.error(fallbackErr);
+            setCopyStatus("Не удалось скопировать", true);
+          }
+        }
       }
 
       async function fetchJSON(url) {
@@ -362,6 +498,89 @@
         setTimeout(() => {
           if (planStatus.textContent === message) planStatus.textContent = "";
         }, 2400);
+      }
+
+      function buildRawTable(data) {
+        if (!data || !data.metrics || data.metrics.length === 0) {
+          rawTableContainer.innerHTML = '<div class="empty-state">Нет данных за выбранный период.</div>';
+          return;
+        }
+
+        const days = data.days || [];
+        const weeks = data.weeks || [];
+        const metrics = data.metrics || [];
+
+        const table = document.createElement("table");
+        table.className = "d1-table raw-table";
+
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+
+        const thMetric = document.createElement("th");
+        thMetric.textContent = "Показатель";
+        thMetric.className = "metric-col sticky-col";
+        headRow.appendChild(thMetric);
+
+        let weekIndex = 0;
+        days.forEach((day, idx) => {
+          const th = document.createElement("th");
+          th.innerHTML = `<div class="day-head"><strong>${String(day.day).padStart(2, "0")}</strong><span>${RUS_DAYS[day.dow]}</span></div>`;
+          headRow.appendChild(th);
+
+          if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+            const thWeek = document.createElement("th");
+            thWeek.textContent = "Итог нед.";
+            thWeek.className = "week-total";
+            headRow.appendChild(thWeek);
+            weekIndex += 1;
+          }
+        });
+
+        const thMonth = document.createElement("th");
+        thMonth.textContent = "Итого месяц";
+        thMonth.className = "month-total";
+        headRow.appendChild(thMonth);
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        metrics.forEach((metric) => {
+          const row = document.createElement("tr");
+          const nameCell = document.createElement("th");
+          nameCell.textContent = metric.label;
+          nameCell.className = "metric-col sticky-col";
+          row.appendChild(nameCell);
+
+          let idx = 0;
+          weekIndex = 0;
+          metric.values.forEach((value) => {
+            const td = document.createElement("td");
+            td.textContent = formatRawValue(value);
+            row.appendChild(td);
+
+            if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
+              const weekTd = document.createElement("td");
+              weekTd.className = "week-total";
+              const weekValue = metric.week_totals[weekIndex];
+              weekTd.textContent = formatRawValue(weekValue);
+              row.appendChild(weekTd);
+              weekIndex += 1;
+            }
+            idx += 1;
+          });
+
+          const monthTd = document.createElement("td");
+          monthTd.className = "month-total";
+          monthTd.textContent = formatRawValue(metric.month_total);
+          row.appendChild(monthTd);
+
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        rawTableContainer.innerHTML = "";
+        rawTableContainer.appendChild(table);
       }
 
       async function savePlan(metricCode, value) {
@@ -590,7 +809,7 @@
         tableContainer.appendChild(table);
       }
 
-      async function loadData() {
+      async function loadSummary() {
         if (!state.branchCode) return;
         if (!state.month) {
           tableContainer.innerHTML =
@@ -609,6 +828,33 @@
           tableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить данные.</div>';
         }
       }
+
+      async function loadRaw() {
+        if (!state.branchCode) return;
+        if (!state.month) {
+          rawTableContainer.innerHTML = '<div class="empty-state">Нет данных за выбранный период.</div>';
+          return;
+        }
+        rawTableContainer.innerHTML = '<div class="empty-state">Загрузка данных…</div>';
+        try {
+          const data = await fetchJSON(
+            `/api/cuteam/raw?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(state.month)}`
+          );
+          state.rawData = data;
+          buildRawTable(data);
+        } catch (err) {
+          console.error(err);
+          rawTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить данные.</div>';
+        }
+      }
+
+      async function loadData() {
+        await Promise.all([loadSummary(), loadRaw()]);
+      }
+
+      rawCopyBtn.addEventListener("click", () => {
+        copyRawTSV();
+      });
 
       branchSelect.addEventListener("change", async (event) => {
         state.branchCode = event.target.value;
@@ -634,6 +880,7 @@
           await loadBranches();
           if (!state.branchCode) {
             tableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
+            rawTableContainer.innerHTML = '<div class="empty-state">Нет филиалов для отображения.</div>';
             return;
           }
           await loadMonths();
@@ -642,6 +889,7 @@
         } catch (err) {
           console.error(err);
           tableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
+          rawTableContainer.innerHTML = '<div class="empty-state">Не удалось загрузить настройки.</div>';
         }
       })();
     </script>
