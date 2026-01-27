@@ -9,6 +9,7 @@ from .d1_service import (
     IGNORE_BRANCH_CODES,
     _branch_name_map,
     _is_avg_metric,
+    _normalize_branch_code,
     _parse_month,
     _prev_month_start,
 )
@@ -135,6 +136,7 @@ def _last_n_months(end_month_start: dt.date, count: int) -> List[dt.date]:
 def _fetch_values(
     branch_code: str, start_date: str, end_date: str, codes: List[str]
 ) -> Dict[str, Dict[str, float]]:
+    branch_code = _normalize_branch_code(branch_code) or branch_code
     placeholders = ", ".join("?" for _ in codes)
     sql = (
         "SELECT metric_code, date, value "
@@ -252,6 +254,7 @@ def _delta(current: Optional[float], prev: Optional[float]) -> Dict[str, Optiona
 
 
 def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
+    branch_code = _normalize_branch_code(branch_code) or branch_code
     if branch_code in IGNORE_BRANCH_CODES:
         return None
     name_map = _branch_name_map()
@@ -267,6 +270,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 
 def build_overview_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
+    branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     month_start = _parse_month(month)
     month_end = _month_end(month_start)
 

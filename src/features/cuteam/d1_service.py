@@ -22,6 +22,27 @@ BRANCH_ORDER_INDEX = {name: idx for idx, name in enumerate(BRANCH_ORDER)}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 AVG_HINTS = ("percent", "ratio", "share")
 IGNORE_BRANCH_CODES = {"SUM", "\u0421\u0423\u041c"}
+LATIN_TO_CYR = str.maketrans(
+    {
+        "A": "\u0410",
+        "B": "\u0412",
+        "C": "\u0421",
+        "E": "\u0415",
+        "H": "\u041d",
+        "K": "\u041a",
+        "M": "\u041c",
+        "O": "\u041e",
+        "P": "\u0420",
+        "T": "\u0422",
+        "X": "\u0425",
+        "Y": "\u0423",
+    }
+)
+BRANCH_ALIAS_TO_CANON = {
+    "CC": "\u0421\u0421",
+    "CM": "\u0421\u041c",
+    "MP": "\u041c\u041f",
+}
 YEAR_METRIC_CODES = [
     "revenue_total",
     "revenue_open_space",
@@ -105,6 +126,18 @@ def _fallback_branches() -> List[Dict[str, Any]]:
         if code:
             branches.append({"code": code, "name": name})
     return branches
+
+
+def _normalize_branch_code(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return code
+    raw = str(code).strip().upper()
+    if not raw:
+        return None
+    if raw in BRANCH_ALIAS_TO_CANON:
+        return BRANCH_ALIAS_TO_CANON[raw]
+    translated = raw.translate(LATIN_TO_CYR)
+    return translated or raw
 
 
 def _branch_name_map() -> Dict[str, str]:
@@ -202,6 +235,7 @@ def list_branches() -> List[Dict[str, Any]]:
 
 def list_months(branch_code: str) -> List[str]:
     init_schema()
+    branch_code = _normalize_branch_code(branch_code) or branch_code
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT substr(date, 1, 7) AS month "
@@ -330,6 +364,7 @@ def _fetch_plans(branch_code: str, month_start: str) -> Dict[str, float]:
 
 
 def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
+    branch_code = _normalize_branch_code(branch_code) or branch_code
     if branch_code in IGNORE_BRANCH_CODES:
         return None
     name_map = _branch_name_map()
@@ -345,6 +380,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
+    branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     base_month_start = _parse_month(month)
     prev_month_start = _prev_month_start(base_month_start)
     prev_days = _month_days(prev_month_start)
@@ -470,6 +506,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
 
 def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
+    branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     month_start = _parse_month(month)
     days = _month_days(month_start)
     if not days:
@@ -569,6 +606,7 @@ def _year_range_from_months(months: List[str]) -> List[int]:
 
 def build_year_summary_payload(branch_code: str) -> Dict[str, Any]:
     init_schema()
+    branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     facts = _fetch_year_facts(branch_code)
     plans = _fetch_year_plans(branch_code)
 

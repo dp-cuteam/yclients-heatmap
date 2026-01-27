@@ -213,6 +213,43 @@ RU_MONTHS = {
     "дек": 12,
 }
 
+LATIN_TO_CYR = str.maketrans(
+    {
+        "A": "А",
+        "B": "В",
+        "C": "С",
+        "E": "Е",
+        "H": "Н",
+        "K": "К",
+        "M": "М",
+        "O": "О",
+        "P": "Р",
+        "T": "Т",
+        "X": "Х",
+        "Y": "У",
+    }
+)
+
+BRANCH_ALIAS_TO_CANON = {
+    "CC": "СС",
+    "CM": "СМ",
+    "MP": "МП",
+}
+
+
+def _normalize_branch_code(code: Optional[str], known_branches: set[str]) -> Optional[str]:
+    if not code:
+        return code
+    raw = str(code).strip().upper()
+    if not raw:
+        return None
+    if raw in BRANCH_ALIAS_TO_CANON:
+        return BRANCH_ALIAS_TO_CANON[raw]
+    translated = raw.translate(LATIN_TO_CYR)
+    if translated in known_branches:
+        return translated
+    return raw
+
 
 def find_year_hint(header: List[Any]) -> Optional[int]:
     for cell in header:
@@ -358,7 +395,7 @@ def iter_records(
 
         header_branch = is_branch_header(row, col_article, col_metric, known_branches, ignore_branches)
         if header_branch:
-            current_branch = header_branch
+            current_branch = _normalize_branch_code(header_branch, known_branches)
             skip_branch = current_branch in ignore_branches
             if current_branch not in known_branches and current_branch not in ignore_branches:
                 stats["unknown_branches"] += 1
@@ -369,8 +406,12 @@ def iter_records(
             val = row[col_branch]
             if val not in (None, ""):
                 branch_code = str(val).strip()
+        if branch_code:
+            branch_code = _normalize_branch_code(branch_code, known_branches)
         if not branch_code:
             branch_code = current_branch
+        if branch_code:
+            branch_code = _normalize_branch_code(branch_code, known_branches)
         if not branch_code or branch_code in ignore_branches:
             continue
         if skip_branch:
@@ -481,6 +522,30 @@ def seed_dimensions(conn: DBConn) -> None:
     conn.commit()
 
 
+def normalize_existing_branches(conn: DBConn) -> None:
+    known_branches = {b["code"] for b in reference.BRANCHES}
+    for alias, canonical in BRANCH_ALIAS_TO_CANON.items():
+        if canonical not in known_branches:
+            continue
+        cur = conn.execute(
+            "SELECT 1 FROM manual_sheet_daily WHERE branch_code = ? LIMIT 1",
+            (alias,),
+        )
+        row = cur.fetchone() if hasattr(cur, "fetchone") else None
+        if not row:
+            continue
+        conn.execute(
+            "INSERT INTO manual_sheet_daily (branch_code, metric_code, date, value, source, updated_at) "
+            "SELECT ?, metric_code, date, value, source, updated_at "
+            "FROM manual_sheet_daily WHERE branch_code = ? "
+            "ON CONFLICT(branch_code, metric_code, date) DO UPDATE SET "
+            "value=excluded.value, source=excluded.source, updated_at=excluded.updated_at",
+            (canonical, alias),
+        )
+        conn.execute("DELETE FROM manual_sheet_daily WHERE branch_code = ?", (alias,))
+    conn.commit()
+
+
 def main() -> None:
     args = parse_args()
 
@@ -505,6 +570,7 @@ def main() -> None:
     try:
         ensure_schema(conn)
         seed_dimensions(conn)
+        normalize_existing_branches(conn)
         inserted = upsert_records(conn, records)
         print(f"Upserted {inserted} rows into manual_sheet_daily")
     finally:
