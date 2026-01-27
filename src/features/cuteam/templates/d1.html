@@ -298,6 +298,18 @@
         font-weight: 700;
       }
 
+      .raw-block th,
+      .raw-block td {
+        font-weight: 700;
+        border-top: 2px solid var(--border);
+        background: rgba(233, 189, 166, 0.18);
+      }
+
+      .raw-block + tr td,
+      .raw-block + tr th {
+        border-top: 1px solid var(--border-soft);
+      }
+
       .fact-above {
         color: #1f5e46;
         font-weight: 600;
@@ -2159,6 +2171,7 @@
           nameCell.className = "metric-col sticky-col";
           if (metric.is_header) {
             nameCell.classList.add("raw-header");
+            row.classList.add("raw-block");
           }
           row.appendChild(nameCell);
 
@@ -2236,6 +2249,9 @@
 
         metrics.forEach((metric) => {
           const row = document.createElement("tr");
+          if (metric.is_header) {
+            row.classList.add("raw-block");
+          }
           const nameCell = document.createElement("th");
           nameCell.textContent = metric.label;
           nameCell.className = "metric-col sticky-col";
@@ -2609,11 +2625,15 @@
         thUnit.className = "unit-col sticky-col";
         headRow.appendChild(thUnit);
 
+        const prevMonthLabelIdx = weekLabels.indexOf("Итого пред. мес");
         if (weekLabels.length) {
-          weekLabels.forEach((label) => {
+          weekLabels.forEach((label, idx) => {
             const th = document.createElement("th");
             th.textContent = label;
             th.className = "week-total";
+            if (idx === prevMonthLabelIdx) {
+              th.classList.add("month-total");
+            }
             headRow.appendChild(th);
           });
         } else {
@@ -2688,9 +2708,12 @@
           unitCell.className = "unit-col sticky-col";
           row.appendChild(unitCell);
 
-          metric.week_totals.forEach((value) => {
+          metric.week_totals.forEach((value, idx) => {
             const td = document.createElement("td");
             td.className = "week-total";
+            if (idx === prevMonthLabelIdx) {
+              td.classList.add("month-total");
+            }
             setCellValue(td, value, (v) => formatValue(v, metric.unit));
             row.appendChild(td);
           });
