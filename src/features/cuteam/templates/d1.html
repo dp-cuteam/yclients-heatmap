@@ -369,7 +369,8 @@
         </div>
         <div class="field">
           <label>Пересчитать</label>
-          <button class="ghost" id="recalcBtn" type="button" disabled>Недоступно</button>
+          <button class="ghost" id="recalcBtn" type="button">Пересчитать</button>
+          <div class="copy-status" id="recalcStatus"></div>
         </div>
       </section>
 
@@ -531,6 +532,8 @@
       const yearCopyStatus = document.getElementById("yearCopyStatus");
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
+      const recalcBtn = document.getElementById("recalcBtn");
+      const recalcStatus = document.getElementById("recalcStatus");
 
 
       function formatNumber(value, decimals = 0) {
@@ -785,6 +788,16 @@
         planStatus.style.color = isError ? "#b2412e" : "#2f7d55";
         setTimeout(() => {
           if (planStatus.textContent === message) planStatus.textContent = "";
+        }, 2400);
+      }
+
+      function setRecalcStatus(message, isError = false) {
+        if (!recalcStatus) return;
+        recalcStatus.textContent = message || "";
+        if (!message) return;
+        recalcStatus.style.color = isError ? "#b2412e" : "#2f7d55";
+        setTimeout(() => {
+          if (recalcStatus.textContent === message) recalcStatus.textContent = "";
         }, 2400);
       }
 
@@ -1509,6 +1522,27 @@
         await Promise.all([loadSummary(), loadRaw(), loadComparison(), loadYearSummary()]);
       }
 
+      async function runRecalc() {
+        if (!recalcBtn) return;
+        recalcBtn.disabled = true;
+        const originalLabel = recalcBtn.textContent;
+        recalcBtn.textContent = "Запуск…";
+        try {
+          await fetchJSON("/api/admin/cuteam/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sheet_names: [], dry_run: false }),
+          });
+          setRecalcStatus("Запущено");
+        } catch (err) {
+          console.error(err);
+          setRecalcStatus("Ошибка запуска", true);
+        } finally {
+          recalcBtn.disabled = false;
+          recalcBtn.textContent = originalLabel || "Пересчитать";
+        }
+      }
+
       rawCopyBtn.addEventListener("click", () => {
         copyRawTSV();
       });
@@ -1521,6 +1555,11 @@
       yearCopyBtn.addEventListener("click", () => {
         copyYearTSV();
       });
+      if (recalcBtn) {
+        recalcBtn.addEventListener("click", () => {
+          runRecalc();
+        });
+      }
 
       branchSelect.addEventListener("change", async (event) => {
         state.branchCode = event.target.value;
