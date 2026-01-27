@@ -993,8 +993,7 @@
             ].join("	")
           );
         });
-        return lines.join("
-");
+        return lines.join("\n");
       }
 
       async function copyCompareTSV() {
@@ -1186,8 +1185,7 @@
             lines.push(factRow.join("	"));
           });
         });
-        return lines.join("
-");
+        return lines.join("\n");
       }
 
       async function copyYearTSV() {
