@@ -1132,6 +1132,19 @@ def api_cuteam_sync(request: Request, background: BackgroundTasks, payload: dict
     return {"status": "started", "sheets": sheet_names, "dry_run": dry_run}
 
 
+@app.post("/api/admin/cuteam/import-plans-checks")
+def api_cuteam_import_plans_checks(request: Request, background: BackgroundTasks):
+    require_admin(request)
+    try:
+        task = cuteam_admin.start_import_plans_checks()
+    except RuntimeError as exc:
+        detail = str(exc)
+        code = 409 if "already running" in detail else 400
+        raise HTTPException(status_code=code, detail=detail) from exc
+    background.add_task(task)
+    return {"status": "started"}
+
+
 @app.get("/api/admin/yclients-debug-log")
 def api_yclients_debug_log(request: Request, lines: int = 50):
     """Get last N lines from YCLIENTS API debug log."""

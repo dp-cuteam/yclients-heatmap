@@ -26,6 +26,12 @@ const cuteamOutput = document.getElementById("cuteamOutput");
 const cuteamSheetNames = document.getElementById("cuteamSheetNames");
 const cuteamSyncBtn = document.getElementById("cuteamSync");
 const cuteamSyncDryBtn = document.getElementById("cuteamSyncDry");
+const cuteamImportFiles = document.getElementById("cuteamImportFiles");
+const cuteamImportFilesMeta = document.getElementById("cuteamImportFilesMeta");
+const cuteamImportStatus = document.getElementById("cuteamImportStatus");
+const cuteamImportMeta = document.getElementById("cuteamImportMeta");
+const cuteamImportOutput = document.getElementById("cuteamImportOutput");
+const cuteamImportBtn = document.getElementById("cuteamImportBtn");
 
 async function fetchJSON(url, options = {}) {
   const res = await fetch(url, options);
@@ -325,6 +331,53 @@ async function refreshCuteamStatus() {
     if (cuteamSheetNames && !cuteamSheetNames.value && env.sheet_name) {
       cuteamSheetNames.value = env.sheet_name;
     }
+
+    const imports = data.imports || {};
+    const importState = imports.state || {};
+    const importFiles = imports.files || {};
+    const importSheets = imports.sheets || {};
+    if (cuteamImportFiles) {
+      const plans = importFiles.plans || {};
+      const checks = importFiles.checks || {};
+      const ok = plans.exists && checks.exists;
+      cuteamImportFiles.textContent = ok ? "Файлы найдены" : "Файлы не найдены";
+      const fileParts = [];
+      if (plans.path) {
+        const size =
+          plans.size !== undefined && plans.size !== null ? ` · ${formatBytes(plans.size)}` : "";
+        fileParts.push(`Планы: ${plans.path}${size}`);
+      }
+      if (checks.path) {
+        const size =
+          checks.size !== undefined && checks.size !== null ? ` · ${formatBytes(checks.size)}` : "";
+        fileParts.push(`Чеки: ${checks.path}${size}`);
+      }
+      if (cuteamImportFilesMeta) {
+        cuteamImportFilesMeta.textContent = fileParts.join(" · ") || "—";
+      }
+    }
+    if (cuteamImportStatus) {
+      const importStatusMap = {
+        idle: "Ожидание",
+        running: "Выполняется",
+        success: "Успешно",
+        error: "Ошибка",
+      };
+      cuteamImportStatus.textContent =
+        importStatusMap[importState.status] || importState.status || "—";
+    }
+    if (cuteamImportMeta) {
+      const metaParts = [];
+      if (importState.started_at) metaParts.push(`старт: ${importState.started_at}`);
+      if (importState.finished_at) metaParts.push(`финиш: ${importState.finished_at}`);
+      if (importState.last_error) metaParts.push(`ошибка: ${importState.last_error}`);
+      if (importSheets.plans) metaParts.push(`лист планов: ${importSheets.plans}`);
+      if (importSheets.checks) metaParts.push(`лист чеков: ${importSheets.checks}`);
+      cuteamImportMeta.textContent = metaParts.join(" · ") || "—";
+    }
+    if (cuteamImportOutput) {
+      cuteamImportOutput.textContent = importState.last_output || "—";
+    }
   } catch (err) {
     cuteamDbStatus.textContent = "Ошибка";
     cuteamDbMeta.textContent = err.message || "—";
@@ -359,6 +412,21 @@ if (cuteamSyncBtn) {
 }
 if (cuteamSyncDryBtn) {
   cuteamSyncDryBtn.addEventListener("click", () => startCuteamSync(true));
+}
+if (cuteamImportBtn) {
+  cuteamImportBtn.addEventListener("click", async () => {
+    cuteamImportBtn.disabled = true;
+    try {
+      await fetchJSON("/api/admin/cuteam/import-plans-checks", { method: "POST" });
+    } catch (err) {
+      if (cuteamImportOutput) {
+        cuteamImportOutput.textContent = err.message || "Ошибка";
+      }
+    } finally {
+      cuteamImportBtn.disabled = false;
+      await refreshCuteamStatus();
+    }
+  });
 }
 if (cuteamDbStatus) {
   refreshCuteamStatus().catch((err) => console.error(err));

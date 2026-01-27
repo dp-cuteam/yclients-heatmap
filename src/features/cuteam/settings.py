@@ -34,6 +34,10 @@ class CuteamSettings:
     schema_path: Path
     branch_mapping_path: Path
     metric_mapping_path: Path
+    plans_2025_path: Path
+    plans_2025_sheet: str
+    checks_path: Path
+    checks_sheet: str
 
 
 def load_settings() -> CuteamSettings:
@@ -70,6 +74,22 @@ def load_settings() -> CuteamSettings:
     schema_path = indicators_dir / "shared" / "db" / "schema.sql"
     branch_mapping_path = indicators_dir / "data" / "branch_mapping.json"
     metric_mapping_path = indicators_dir / "data" / "metric_mapping.json"
+    plans_2025_path = _resolve_path(
+        os.getenv(
+            "PLANS_2025_PATH",
+            str(indicators_dir / "data" / "imports" / "plans25.xlsx"),
+        ),
+        ROOT_DIR,
+    )
+    plans_2025_sheet = os.getenv("PLANS_2025_SHEET", "Свод месяца 25")
+    checks_path = _resolve_path(
+        os.getenv(
+            "CHECKS_PATH",
+            str(indicators_dir / "data" / "imports" / "checks.xlsx"),
+        ),
+        ROOT_DIR,
+    )
+    checks_sheet = os.getenv("CHECKS_SHEET", "OLAP Отчет по продажам")
     return CuteamSettings(
         root_dir=ROOT_DIR,
         data_dir=data_dir,
@@ -83,6 +103,10 @@ def load_settings() -> CuteamSettings:
         schema_path=schema_path,
         branch_mapping_path=branch_mapping_path,
         metric_mapping_path=metric_mapping_path,
+        plans_2025_path=plans_2025_path,
+        plans_2025_sheet=plans_2025_sheet,
+        checks_path=checks_path,
+        checks_sheet=checks_sheet,
     )
 
 

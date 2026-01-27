@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List
 
 from .db import get_conn, init_schema, db_source_label, db_target_label, is_postgres
@@ -23,6 +24,15 @@ SYNC_STATE: Dict[str, Any] = {
     "dry_run": False,
 }
 
+IMPORT_LOCK = threading.Lock()
+IMPORT_STATE: Dict[str, Any] = {
+    "status": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "last_error": None,
+    "last_output": None,
+}
+
 
 @dataclass(frozen=True)
 class CuteamStatus:
@@ -37,6 +47,7 @@ class CuteamStatus:
     branches: int | None
     env: Dict[str, Any]
     sync: Dict[str, Any]
+    imports: Dict[str, Any]
 
 
 def _db_file_info() -> tuple[bool, int | None]:
@@ -58,6 +69,19 @@ def _query_scalar(conn, sql: str, params: tuple = ()) -> Any:
     if isinstance(row, dict):
         return next(iter(row.values()), None)
     return row[0]
+
+
+def _file_info(path: os.PathLike[str] | str | None) -> Dict[str, Any]:
+    if not path:
+        return {"exists": False, "path": None, "size": None}
+    file_path = Path(path)
+    if not file_path.exists():
+        return {"exists": False, "path": str(file_path), "size": None}
+    try:
+        size = file_path.stat().st_size
+    except OSError:
+        size = None
+    return {"exists": True, "path": str(file_path), "size": size}
 
 
 def get_status() -> CuteamStatus:
@@ -82,6 +106,17 @@ def get_status() -> CuteamStatus:
         "db_source": db_source_label(),
         "db_env": settings.db_url_env,
     }
+    imports = {
+        "state": IMPORT_STATE.copy(),
+        "files": {
+            "plans": _file_info(settings.plans_2025_path),
+            "checks": _file_info(settings.checks_path),
+        },
+        "sheets": {
+            "plans": settings.plans_2025_sheet,
+            "checks": settings.checks_sheet,
+        },
+    }
 
     return CuteamStatus(
         db_path=db_target_label(),
@@ -95,6 +130,7 @@ def get_status() -> CuteamStatus:
         branches=branches,
         env=env,
         sync=SYNC_STATE.copy(),
+        imports=imports,
     )
 
 
@@ -160,3 +196,66 @@ def start_sync(sheet_names: List[str], dry_run: bool = False):
         SYNC_STATE["last_sheets"] = sheet_names
         SYNC_STATE["dry_run"] = dry_run
     return lambda: _run_sync(sheet_names, dry_run)
+
+
+def _run_import_plans_checks() -> None:
+    outputs = []
+    error = None
+    cwd = str(settings.root_dir / "Показатели")
+    tasks = [
+        (
+            "plans",
+            "ingest.import_plans_2025",
+            [str(settings.plans_2025_path), "--sheet", settings.plans_2025_sheet],
+        ),
+        (
+            "checks",
+            "ingest.import_checks",
+            [str(settings.checks_path), "--sheet", settings.checks_sheet],
+        ),
+    ]
+    for label, module, args in tasks:
+        file_path = Path(args[0])
+        if not file_path.exists():
+            error = f"missing file: {file_path}"
+            outputs.append(f"[{label}] ERROR: {error}")
+            break
+        cmd = [sys.executable, "-m", module] + args
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=os.environ.copy(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            error = str(exc)
+            outputs.append(f"[{label}] ERROR: {error}")
+            break
+        outputs.append(f"[{label}] stdout:\n{result.stdout.strip()}")
+        if result.stderr:
+            outputs.append(f"[{label}] stderr:\n{result.stderr.strip()}")
+        if result.returncode != 0:
+            error = f"exit={result.returncode}"
+            break
+
+    with IMPORT_LOCK:
+        IMPORT_STATE["status"] = "error" if error else "success"
+        IMPORT_STATE["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        IMPORT_STATE["last_error"] = error
+        combined = "\n\n".join(outputs)
+        IMPORT_STATE["last_output"] = combined[-8000:] if combined else None
+
+
+def start_import_plans_checks():
+    with IMPORT_LOCK:
+        if IMPORT_STATE.get("status") == "running":
+            raise RuntimeError("import already running")
+        IMPORT_STATE["status"] = "running"
+        IMPORT_STATE["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        IMPORT_STATE["finished_at"] = None
+        IMPORT_STATE["last_error"] = None
+        IMPORT_STATE["last_output"] = None
+    return _run_import_plans_checks
