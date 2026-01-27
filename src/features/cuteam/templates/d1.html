@@ -176,6 +176,17 @@
         text-align: center;
       }
 
+      .year-table thead th {
+        position: sticky;
+        top: 0;
+        background: var(--card);
+        z-index: 6;
+      }
+
+      .year-table thead th.metric-col {
+        z-index: 8;
+      }
+
       .year-table td.plan-col input {
         width: 100%;
         min-width: 70px;
@@ -958,6 +969,9 @@
           });
         }
         header.push("Итого месяц");
+        header.push("План");
+        header.push("Прогноз");
+        header.push("%");
 
         const lines = [header.join("\t")];
         metrics.forEach((metric) => {
@@ -966,6 +980,9 @@
             row.push(tsvValue(value));
           });
           row.push(tsvValue(metric.month_total));
+          row.push(tsvValue(metric.plan));
+          row.push(tsvValue(metric.forecast));
+          row.push(tsvValue(metric.forecast_pct));
           lines.push(row.join("\t"));
         });
         return lines.join("\n");
@@ -2574,7 +2591,7 @@
         const groups = data.groups || {};
 
         const weekCount = weekLabels.length || weeks.length;
-        const totalCols = 2 + weekCount + 1;
+        const totalCols = 2 + weekCount + 4;
 
         const table = document.createElement("table");
         table.className = "d1-table";
@@ -2614,6 +2631,21 @@
         thMonth.textContent = "Итого месяц";
         thMonth.className = "month-total";
         headRow.appendChild(thMonth);
+
+        const thPlan = document.createElement("th");
+        thPlan.textContent = "План";
+        thPlan.className = "plan-col";
+        headRow.appendChild(thPlan);
+
+        const thForecast = document.createElement("th");
+        thForecast.textContent = "Прогноз";
+        thForecast.className = "plan-col";
+        headRow.appendChild(thForecast);
+
+        const thPct = document.createElement("th");
+        thPct.textContent = "%";
+        thPct.className = "plan-col";
+        headRow.appendChild(thPct);
 
         thead.appendChild(headRow);
         table.appendChild(thead);
@@ -2667,6 +2699,21 @@
           monthTd.className = "month-total";
           setCellValue(monthTd, metric.month_total, (v) => formatValue(v, metric.unit));
           row.appendChild(monthTd);
+
+          const planTd = document.createElement("td");
+          planTd.className = "plan-col";
+          setCellValue(planTd, metric.plan, formatRawValue);
+          row.appendChild(planTd);
+
+          const forecastTd = document.createElement("td");
+          forecastTd.className = "plan-col";
+          setCellValue(forecastTd, metric.forecast, formatRawValue);
+          row.appendChild(forecastTd);
+
+          const pctTd = document.createElement("td");
+          pctTd.className = "plan-col";
+          setCellValue(pctTd, metric.forecast_pct, (v) => formatValue(v, "pct"));
+          row.appendChild(pctTd);
 
           tbody.appendChild(row);
         });

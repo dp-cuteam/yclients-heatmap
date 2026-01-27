@@ -374,19 +374,20 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         for chunk in curr_chunks
     ]
 
-    week_ranges = prev_week_ranges + curr_week_ranges
-
     week_labels: List[str] = []
     for idx, week in enumerate(prev_week_ranges):
         label_idx = len(prev_week_ranges) - idx
         start = dt.date.fromisoformat(week["start"])
         end = dt.date.fromisoformat(week["end"])
-        week_labels.append(f"Нед -{label_idx} ({start:%d.%m}–{end:%d.%m})")
+        week_labels.append(f"Нед -{label_idx} ({start:%d.%m}-{end:%d.%m})")
+
+    week_labels.append("Итого пред. мес")
+
     for idx, week in enumerate(curr_week_ranges):
         label_idx = idx + 1
         start = dt.date.fromisoformat(week["start"])
         end = dt.date.fromisoformat(week["end"])
-        week_labels.append(f"Нед {label_idx} ({start:%d.%m}–{end:%d.%m})")
+        week_labels.append(f"Нед {label_idx} ({start:%d.%m}-{end:%d.%m})")
 
     start_iso = prev_days[0].isoformat()
     end_iso = curr_days[-1].isoformat()
@@ -407,11 +408,22 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         for chunk in prev_chunks:
             slice_values = prev_values[chunk["start_idx"] : chunk["end_idx"] + 1]
             week_totals.append(_sum(slice_values))
+        prev_month_total = _avg(prev_values) if _is_avg_metric(metric.code) else _sum(prev_values)
+        week_totals.append(prev_month_total)
         for chunk in curr_chunks:
             slice_values = curr_values[chunk["start_idx"] : chunk["end_idx"] + 1]
             week_totals.append(_sum(slice_values))
 
-        month_total = _sum(curr_values)
+        month_total = _avg(curr_values) if _is_avg_metric(metric.code) else _sum(curr_values)
+
+        filled_days = sum(1 for value in curr_values if value is not None)
+        forecast = None
+        if filled_days:
+            if _is_avg_metric(metric.code):
+                forecast = month_total
+            elif month_total is not None:
+                forecast = float(month_total) / float(filled_days) * float(len(curr_days))
+        forecast_pct = None
 
         plan_value = plans.get(metric.code) if metric.plan else None
         plan_pct = None
@@ -420,6 +432,8 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
             if plan_value != 0:
                 plan_pct = float(month_total) / float(plan_value) * 100
             plan_delta = float(month_total) - float(plan_value)
+        if plan_value is not None and forecast is not None and plan_value != 0:
+            forecast_pct = float(forecast) / float(plan_value) * 100
 
         metrics_payload.append(
             {
@@ -435,6 +449,8 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
                 "plan": plan_value,
                 "plan_pct": plan_pct,
                 "plan_delta": plan_delta,
+                "forecast": forecast,
+                "forecast_pct": forecast_pct,
             }
         )
 
@@ -445,7 +461,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
             {"date": day.isoformat(), "day": day.day, "dow": day.weekday()}
             for day in curr_days
         ],
-        "weeks": week_ranges,
+        "weeks": prev_week_ranges + curr_week_ranges,
         "week_labels": week_labels,
         "groups": GROUP_LABELS,
         "metrics": metrics_payload,
