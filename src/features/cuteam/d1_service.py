@@ -339,53 +339,88 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
     base_month_start = _parse_month(month)
-    summary_month_start = _prev_month_start(base_month_start)
-    days = _month_days(summary_month_start)
-    if not days:
+    prev_month_start = _prev_month_start(base_month_start)
+    prev_days = _month_days(prev_month_start)
+    curr_days = _month_days(base_month_start)
+    if not prev_days or not curr_days:
         return {"branch": None, "month": month, "days": [], "weeks": [], "metrics": []}
 
-    week_chunks = _week_chunks(days)
-    if len(week_chunks) > 5:
-        week_chunks = week_chunks[-5:]
-    week_ranges = [
+    prev_chunks = _week_chunks(prev_days)
+    if len(prev_chunks) > 5:
+        prev_chunks = prev_chunks[-5:]
+    curr_chunks = _week_chunks(curr_days)
+    if len(curr_chunks) > 5:
+        curr_chunks = curr_chunks[-5:]
+
+    prev_week_ranges = [
         {
-            "start": days[chunk["start_idx"]].isoformat(),
-            "end": days[chunk["end_idx"]].isoformat(),
+            "start": prev_days[chunk["start_idx"]].isoformat(),
+            "end": prev_days[chunk["end_idx"]].isoformat(),
         }
-        for chunk in week_chunks
+        for chunk in prev_chunks
     ]
-    pad_count = max(0, 5 - len(week_ranges))
+    curr_week_ranges = [
+        {
+            "start": curr_days[chunk["start_idx"]].isoformat(),
+            "end": curr_days[chunk["end_idx"]].isoformat(),
+        }
+        for chunk in curr_chunks
+    ]
+
+    prev_pad = max(0, 5 - len(prev_week_ranges))
+    curr_pad = max(0, 5 - len(curr_week_ranges))
+    week_ranges: List[Optional[Dict[str, str]]] = (
+        [None] * prev_pad + prev_week_ranges + curr_week_ranges + [None] * curr_pad
+    )
+
     week_labels: List[str] = []
     for idx in range(5):
         label_idx = 5 - idx
-        if idx < pad_count:
+        if idx < prev_pad:
             week_labels.append(f"Нед -{label_idx} ()")
         else:
-            week = week_ranges[idx - pad_count]
+            week = prev_week_ranges[idx - prev_pad]
             start = dt.date.fromisoformat(week["start"])
             end = dt.date.fromisoformat(week["end"])
             week_labels.append(f"Нед -{label_idx} ({start:%d.%m}–{end:%d.%m})")
+    for idx in range(5):
+        label_idx = idx + 1
+        if idx >= len(curr_week_ranges):
+            week_labels.append(f"Нед {label_idx} ()")
+        else:
+            week = curr_week_ranges[idx]
+            start = dt.date.fromisoformat(week["start"])
+            end = dt.date.fromisoformat(week["end"])
+            week_labels.append(f"Нед {label_idx} ({start:%d.%m}–{end:%d.%m})")
 
-    start_iso = days[0].isoformat()
-    end_iso = days[-1].isoformat()
+    start_iso = prev_days[0].isoformat()
+    end_iso = curr_days[-1].isoformat()
     daily_values = _fetch_daily_values(branch_code, start_iso, end_iso)
-    plans = _fetch_plans(branch_code, summary_month_start.isoformat())
+    plans = _fetch_plans(branch_code, base_month_start.isoformat())
 
     metrics_payload: List[Dict[str, Any]] = []
     for metric in D1_METRICS:
         values_map = daily_values.get(metric.code, {})
-        day_values: List[Optional[float]] = [
-            values_map.get(day.isoformat()) for day in days
+        prev_values: List[Optional[float]] = [
+            values_map.get(day.isoformat()) for day in prev_days
+        ]
+        curr_values: List[Optional[float]] = [
+            values_map.get(day.isoformat()) for day in curr_days
         ]
 
         week_totals: List[Optional[float]] = []
-        for chunk in week_chunks:
-            slice_values = day_values[chunk["start_idx"] : chunk["end_idx"] + 1]
+        if prev_pad:
+            week_totals.extend([None] * prev_pad)
+        for chunk in prev_chunks:
+            slice_values = prev_values[chunk["start_idx"] : chunk["end_idx"] + 1]
             week_totals.append(_sum(slice_values))
-        if pad_count:
-            week_totals = [None] * pad_count + week_totals
+        for chunk in curr_chunks:
+            slice_values = curr_values[chunk["start_idx"] : chunk["end_idx"] + 1]
+            week_totals.append(_sum(slice_values))
+        if curr_pad:
+            week_totals.extend([None] * curr_pad)
 
-        month_total = _sum(day_values)
+        month_total = _sum(curr_values)
 
         plan_value = plans.get(metric.code) if metric.plan else None
         plan_pct = None
@@ -403,7 +438,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
                 "unit": metric.unit,
                 "group": metric.group,
                 "plan_enabled": metric.plan,
-                "values": day_values,
+                "values": curr_values,
                 "week_totals": week_totals,
                 "month_total": month_total,
                 "plan": plan_value,
@@ -414,10 +449,10 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
 
     return {
         "branch": _fetch_branch(branch_code),
-        "month": summary_month_start.strftime("%Y-%m"),
+        "month": base_month_start.strftime("%Y-%m"),
         "days": [
             {"date": day.isoformat(), "day": day.day, "dow": day.weekday()}
-            for day in days
+            for day in curr_days
         ],
         "weeks": week_ranges,
         "week_labels": week_labels,

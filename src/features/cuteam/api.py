@@ -10,6 +10,7 @@ from .d1_service import (
     list_months,
     upsert_plan,
 )
+from .overview_service import build_overview_payload
 
 
 router = APIRouter(prefix="/api/cuteam", tags=["cuteam"])
@@ -44,6 +45,14 @@ def api_raw(branch_code: str = Query(..., min_length=1), month: str = Query(...,
 @router.get("/year-summary")
 def api_year_summary(branch_code: str = Query(..., min_length=1)):
     payload = build_year_summary_payload(branch_code)
+    if not payload.get("branch"):
+        raise HTTPException(status_code=404, detail="Branch not found")
+    return payload
+
+
+@router.get("/overview")
+def api_overview(branch_code: str = Query(..., min_length=1), month: str = Query(..., min_length=7)):
+    payload = build_overview_payload(branch_code, month)
     if not payload.get("branch"):
         raise HTTPException(status_code=404, detail="Branch not found")
     return payload

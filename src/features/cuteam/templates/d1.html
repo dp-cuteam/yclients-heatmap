@@ -328,6 +328,135 @@
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .kpi-tile {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .kpi-title {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .kpi-value {
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .kpi-sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .chart-card {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        min-height: 120px;
+      }
+
+      .chart-title {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .table-wrap {
+        margin-top: 12px;
+        overflow: auto;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-soft);
+        background: var(--card);
+      }
+
+      .mini-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .mini-table th,
+      .mini-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border-soft);
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .mini-table th:first-child,
+      .mini-table td:first-child {
+        text-align: left;
+      }
+
+      .sparkline {
+        width: 100%;
+        height: 80px;
+      }
+
+      .stack-bar {
+        display: flex;
+        height: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(58, 58, 58, 0.1);
+      }
+
+      .stack-row {
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .stack-label {
+        color: var(--muted);
+      }
+
+      .scatter {
+        width: 100%;
+        height: 140px;
+      }
+
+      .status-pill {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+
+      .status-ok {
+        background: rgba(47, 125, 85, 0.15);
+        color: #1f5e46;
+      }
+
+      .status-alert {
+        background: rgba(178, 65, 46, 0.15);
+        color: #8b1e1e;
+      }
     </style>
   </head>
   <body>
@@ -391,7 +520,7 @@
           <div>
             <div class="eyebrow">Свод</div>
             <h2 class="card-title">Агрегированные показатели в динамике</h2>
-            <div class="card-subtitle">Недели предыдущего месяца (5 недель)</div>
+            <div class="card-subtitle">5 недель до месяца и 5 недель выбранного месяца</div>
           </div>
           <div class="card-actions">
             <button class="ghost" id="summaryCopyBtn" type="button">Скопировать TSV</button>
@@ -440,61 +569,159 @@
 
       <div class="section-divider"></div>
 
-      <section class="cuteam-card">
+      <section class="cuteam-card" id="overviewSection">
         <div class="card-head">
           <div>
             <div class="eyebrow">NEW Overview</div>
-            <h2 class="card-title">NEW Overview</h2>
-            <div class="card-subtitle">Структура будущих дашбордов и KPI</div>
+            <h2 class="card-title">Главный управленческий дашборд</h2>
+            <div class="card-subtitle">KPI и быстрые ответы на ключевые вопросы</div>
           </div>
         </div>
-        <div class="overview-grid">
-          <div class="overview-item">
-            <h3>1. Главный управленческий дашборд</h3>
-            <p>KPI: выручка всего, коворкинг всего, кофейня всего (checks + avg check), загрузка, порча (writeoff rate).</p>
+        <div class="kpi-grid" id="overviewKpis"></div>
+        <div class="overview-notes" id="overviewNotes"></div>
+      </section>
+
+      <section class="cuteam-card" id="revenueSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 2</div>
+            <h2 class="card-title">Доходы в целом</h2>
+            <div class="card-subtitle">Динамика выручки и сравнение периодов</div>
           </div>
-          <div class="overview-item">
-            <h3>2. Доходы в целом</h3>
-            <p>Динамика выручки + сравнение периодов (WoW, YoY, лучший период), структура наличные/безнал.</p>
+        </div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="revenueDailyChart"></div>
+          <div class="chart-card" id="revenueWeeklyChart"></div>
+          <div class="chart-card" id="revenueMonthlyChart"></div>
+        </div>
+        <div class="table-wrap" id="revenueCompareTable"></div>
+        <div class="table-wrap" id="revenuePeriodsTable"></div>
+      </section>
+
+      <section class="cuteam-card" id="coworkingSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 3</div>
+            <h2 class="card-title">Коворкинг: доходы по направлениям</h2>
+            <div class="card-subtitle">Динамика по неделям и ratio Лаборатория/Аренда</div>
           </div>
-          <div class="overview-item">
-            <h3>3. Коворкинг: доходы по направлениям</h3>
-            <p>Направления аренда/кабинеты/лекторий/лаборатория/ритейл/салон + ratio лаборатория/аренда.</p>
-          </div>
-          <div class="overview-item">
-            <h3>4. Кофейня: основные показатели</h3>
-            <p>Выручка, чеки, средний чек + сравнение WoW/YoY и среднее за 8 недель.</p>
-          </div>
-          <div class="overview-item">
-            <h3>5. Кофейня: структура продаж</h3>
-            <p>Еда и напитки по категориям, структура недели, сезонность.</p>
-          </div>
-          <div class="overview-item">
-            <h3>6. Загрузка и эффективность</h3>
-            <p>Связь загрузки с выручкой (open space, лаборатория, кофейня) + revenue per load.</p>
-          </div>
-          <div class="overview-item">
-            <h3>7. Списания и порча</h3>
-            <p>sold_food_total vs written_off_food_total и writeoff_rate относительно нормы.</p>
-          </div>
-          <div class="overview-item">
-            <h3>8. Деньги и касса</h3>
-            <p>Наличные/безнал, остаток кассы, изъятия, внесения + контроль движения.</p>
-          </div>
-          <div class="overview-item">
-            <h3>9. Расходы</h3>
-            <p>Все основные расходы, структура по категориям, доля от выручки.</p>
-          </div>
-          <div class="overview-item">
-            <h3>10. Прибыль и рентабельность</h3>
-            <p>Gross/operating profit и маржинальность по неделям.</p>
-          </div>
-          <div class="overview-item">
-            <h3>11. Сигналы и контроль</h3>
-            <p>Автоматические алерты по доходам, кофейне, загрузке, кассе и расходам.</p>
-          </div>
+        </div>
+        <div class="kpi-grid" id="coworkingCards"></div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="coworkingLineChart"></div>
+          <div class="chart-card" id="coworkingRatioChart"></div>
         </div>
       </section>
+
+      <section class="cuteam-card" id="coffeeMainSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 4</div>
+            <h2 class="card-title">Кофейня: основные показатели</h2>
+            <div class="card-subtitle">Выручка, чеки, средний чек</div>
+          </div>
+        </div>
+        <div class="kpi-grid" id="coffeeMainCards"></div>
+        <div class="chart-card" id="coffeeMainChart"></div>
+      </section>
+
+      <section class="cuteam-card" id="coffeeStructureSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 5</div>
+            <h2 class="card-title">Кофейня: структура продаж</h2>
+            <div class="card-subtitle">Еда и напитки по неделям</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="coffeeFoodStack"></div>
+          <div class="chart-card" id="coffeeDrinkStack"></div>
+        </div>
+      </section>
+
+      <section class="cuteam-card" id="loadSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 6</div>
+            <h2 class="card-title">Загрузка и эффективность</h2>
+            <div class="card-subtitle">Загрузка vs выручка</div>
+          </div>
+        </div>
+        <div class="kpi-grid" id="loadCards"></div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="loadLineChart"></div>
+          <div class="chart-card" id="loadScatterOpen"></div>
+          <div class="chart-card" id="loadScatterCoffee"></div>
+        </div>
+      </section>
+
+      <section class="cuteam-card" id="writeoffSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 7</div>
+            <h2 class="card-title">Списания и порча</h2>
+            <div class="card-subtitle">Порча и writeoff rate</div>
+          </div>
+        </div>
+        <div class="chart-card" id="writeoffChart"></div>
+        <div class="table-wrap" id="writeoffStats"></div>
+      </section>
+
+      <section class="cuteam-card" id="cashSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 8</div>
+            <h2 class="card-title">Деньги и касса</h2>
+            <div class="card-subtitle">Наличные/безналичные, кассовые расхождения</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="cashLineChart"></div>
+          <div class="chart-card" id="cashBarsChart"></div>
+        </div>
+        <div class="table-wrap" id="cashControlTable"></div>
+      </section>
+
+      <section class="cuteam-card" id="expenseSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 9</div>
+            <h2 class="card-title">Расходы</h2>
+            <div class="card-subtitle">Структура и доля от выручки</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="expenseLineChart"></div>
+          <div class="chart-card" id="expenseStackChart"></div>
+          <div class="chart-card" id="expenseRatioChart"></div>
+        </div>
+      </section>
+
+      <section class="cuteam-card" id="profitSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 10</div>
+            <h2 class="card-title">Прибыль и рентабельность</h2>
+            <div class="card-subtitle">Operating profit и маржа</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="chart-card" id="profitChart"></div>
+          <div class="chart-card" id="marginChart"></div>
+        </div>
+      </section>
+
+      <section class="cuteam-card" id="signalsSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Дашборд 11</div>
+            <h2 class="card-title">Сигналы и контроль</h2>
+            <div class="card-subtitle">Автоматические сигналы по KPI</div>
+          </div>
+        </div>
+        <div class="table-wrap" id="signalsTable"></div>
+      </section>
+
     </div>
 
     <script>
@@ -508,6 +735,7 @@
         rawData: null,
         compareData: null,
         yearData: null,
+        overviewData: null,
       };
 
       const branchSelect = document.getElementById("branchSelect");
@@ -527,6 +755,35 @@
       const yearCopyStatus = document.getElementById("yearCopyStatus");
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
+      const overviewKpis = document.getElementById("overviewKpis");
+      const overviewNotes = document.getElementById("overviewNotes");
+      const revenueDailyChart = document.getElementById("revenueDailyChart");
+      const revenueWeeklyChart = document.getElementById("revenueWeeklyChart");
+      const revenueMonthlyChart = document.getElementById("revenueMonthlyChart");
+      const revenueCompareTable = document.getElementById("revenueCompareTable");
+      const revenuePeriodsTable = document.getElementById("revenuePeriodsTable");
+      const coworkingCards = document.getElementById("coworkingCards");
+      const coworkingLineChart = document.getElementById("coworkingLineChart");
+      const coworkingRatioChart = document.getElementById("coworkingRatioChart");
+      const coffeeMainCards = document.getElementById("coffeeMainCards");
+      const coffeeMainChart = document.getElementById("coffeeMainChart");
+      const coffeeFoodStack = document.getElementById("coffeeFoodStack");
+      const coffeeDrinkStack = document.getElementById("coffeeDrinkStack");
+      const loadCards = document.getElementById("loadCards");
+      const loadLineChart = document.getElementById("loadLineChart");
+      const loadScatterOpen = document.getElementById("loadScatterOpen");
+      const loadScatterCoffee = document.getElementById("loadScatterCoffee");
+      const writeoffChart = document.getElementById("writeoffChart");
+      const writeoffStats = document.getElementById("writeoffStats");
+      const cashLineChart = document.getElementById("cashLineChart");
+      const cashBarsChart = document.getElementById("cashBarsChart");
+      const cashControlTable = document.getElementById("cashControlTable");
+      const expenseLineChart = document.getElementById("expenseLineChart");
+      const expenseStackChart = document.getElementById("expenseStackChart");
+      const expenseRatioChart = document.getElementById("expenseRatioChart");
+      const profitChart = document.getElementById("profitChart");
+      const marginChart = document.getElementById("marginChart");
+      const signalsTable = document.getElementById("signalsTable");
 
 
       function formatNumber(value, decimals = 0) {
@@ -682,7 +939,7 @@
             header.push(`Нед ${idx + 1} (${start}-${end})`);
           });
         }
-        header.push("Итого месяц", "План месяц", "Факт vs План");
+        header.push("Итого месяц");
 
         const lines = [header.join("\t")];
         metrics.forEach((metric) => {
@@ -691,8 +948,6 @@
             row.push(tsvValue(value));
           });
           row.push(tsvValue(metric.month_total));
-          row.push(metric.plan_enabled ? tsvValue(metric.plan ?? "") : "");
-          row.push(formatPlanSummary(metric.plan_pct, metric.plan_delta));
           lines.push(row.join("\t"));
         });
         return lines.join("\n");
@@ -711,6 +966,1014 @@
         } catch (err) {
           summaryCopyStatus.textContent = "Не удалось";
           setTimeout(() => (summaryCopyStatus.textContent = ""), 2400);
+        }
+      }
+
+      const METRIC_LABELS = {
+        revenue_total: "Выручка",
+        revenue_cashless: "Безналичные",
+        revenue_cash: "Наличные",
+        cash_balance_end_day: "Остаток на конец дня",
+        revenue_open_space: "Аренда",
+        revenue_cabinets: "Кабинеты",
+        revenue_lecture: "Лекторий",
+        revenue_lab: "Лаборатория",
+        revenue_retail: "Ритейл",
+        revenue_salon: "Услуги салона",
+        load_percent: "Загрузка",
+        coffee_revenue_total: "Кофейня",
+        coffee_checks: "Чеки",
+        avg_check: "Средний чек",
+        sold_food_total: "Еда всего",
+        revenue_desserts: "Десерты",
+        revenue_food_breakfast: "Завтраки",
+        revenue_food_lunch: "Обеды",
+        revenue_food_croissants: "Круассаны",
+        revenue_food_salads: "Салаты",
+        revenue_food_sandwiches: "Сэндвичи",
+        revenue_drinks_total: "Напитки всего",
+        revenue_coffee: "Кофе",
+        revenue_coffee_hot: "Кофе/чай/какао",
+        revenue_drinks_cold: "Напитки ритейл",
+        revenue_drinks_seasonal: "Сезонные напитки",
+        written_off_food_total: "Порча",
+        writeoff_rate: "Доля порчи",
+        writeoff_rate_full: "Доля порчи",
+        withdrawals_total: "Изъятия",
+        deposit_total: "Внесения",
+        expense_cleaning_salary: "ЗП клининг",
+        expense_staff_salary: "ЗП персонал",
+        expense_maintenance: "Текущий ремонт",
+        expense_facility: "Содержание помещения",
+        expense_delivery_taxi: "Курьер, доставка, такси",
+        expense_food_purchase: "Закупка продуктов",
+        expense_marketing: "Маркетинг",
+        expense_hiring: "Найм",
+        expense_cash_collection: "Инкассация",
+        expense_other: "Прочее",
+        total_expenses: "Расходы всего",
+        expense_ratio: "Доля расходов",
+        gross_profit: "Валовая прибыль",
+        operating_profit: "Опер. прибыль",
+        operating_margin: "Опер. маржа",
+        coworking_total: "Коворкинг всего",
+        lab_to_open_space_ratio: "Лаборатория / Аренда",
+        revenue_per_load: "Выручка на % загрузки",
+        coffee_revenue_per_load: "Кофейня на % загрузки",
+      };
+
+      const METRIC_UNITS = {
+        revenue_total: "rub",
+        revenue_cashless: "rub",
+        revenue_cash: "rub",
+        cash_balance_end_day: "rub",
+        revenue_open_space: "rub",
+        revenue_cabinets: "rub",
+        revenue_lecture: "rub",
+        revenue_lab: "rub",
+        revenue_retail: "rub",
+        revenue_salon: "rub",
+        load_percent: "pct",
+        coffee_revenue_total: "rub",
+        coffee_checks: "qty",
+        avg_check: "rub",
+        sold_food_total: "rub",
+        revenue_desserts: "rub",
+        revenue_food_breakfast: "rub",
+        revenue_food_lunch: "rub",
+        revenue_food_croissants: "rub",
+        revenue_food_salads: "rub",
+        revenue_food_sandwiches: "rub",
+        revenue_drinks_total: "rub",
+        revenue_coffee: "rub",
+        revenue_coffee_hot: "rub",
+        revenue_drinks_cold: "rub",
+        revenue_drinks_seasonal: "rub",
+        written_off_food_total: "rub",
+        writeoff_rate: "pct_ratio",
+        writeoff_rate_full: "pct_ratio",
+        withdrawals_total: "rub",
+        deposit_total: "rub",
+        expense_cleaning_salary: "rub",
+        expense_staff_salary: "rub",
+        expense_maintenance: "rub",
+        expense_facility: "rub",
+        expense_delivery_taxi: "rub",
+        expense_food_purchase: "rub",
+        expense_marketing: "rub",
+        expense_hiring: "rub",
+        expense_cash_collection: "rub",
+        expense_other: "rub",
+        total_expenses: "rub",
+        expense_ratio: "pct_ratio",
+        gross_profit: "rub",
+        operating_profit: "rub",
+        operating_margin: "pct_ratio",
+        coworking_total: "rub",
+        lab_to_open_space_ratio: "ratio",
+        revenue_per_load: "rub",
+        coffee_revenue_per_load: "rub",
+      };
+
+      const COWORKING_CODES = [
+        "revenue_open_space",
+        "revenue_cabinets",
+        "revenue_lecture",
+        "revenue_lab",
+        "revenue_retail",
+        "revenue_salon",
+      ];
+
+      const FOOD_CODES = [
+        "sold_food_total",
+        "revenue_desserts",
+        "revenue_food_breakfast",
+        "revenue_food_lunch",
+        "revenue_food_croissants",
+        "revenue_food_salads",
+        "revenue_food_sandwiches",
+      ];
+
+      const DRINK_CODES = [
+        "revenue_drinks_total",
+        "revenue_coffee",
+        "revenue_coffee_hot",
+        "revenue_drinks_cold",
+        "revenue_drinks_seasonal",
+      ];
+
+      const EXPENSE_CODES = [
+        "expense_cleaning_salary",
+        "expense_staff_salary",
+        "expense_maintenance",
+        "expense_facility",
+        "expense_delivery_taxi",
+        "expense_food_purchase",
+        "expense_marketing",
+        "expense_hiring",
+        "expense_cash_collection",
+        "expense_other",
+      ];
+
+      const PALETTE = [
+        "#d99a83",
+        "#f7c976",
+        "#e9bda6",
+        "#c2d6c4",
+        "#f1d0c2",
+        "#3a3a3a",
+        "#a9836f",
+      ];
+
+      function getMetricLabel(code) {
+        return METRIC_LABELS[code] || code;
+      }
+
+      function getMetricUnit(code) {
+        return METRIC_UNITS[code] || "rub";
+      }
+
+      function formatAuto(value, unit) {
+        if (value === null || value === undefined) return "—";
+        if (unit === "pct_ratio") {
+          return `${formatNumber(value * 100, 1)}%`;
+        }
+        if (unit === "pct") {
+          return `${formatNumber(value, 1)}%`;
+        }
+        if (unit === "ratio") {
+          return formatNumber(value, 2);
+        }
+        if (unit === "qty") {
+          return formatNumber(value, 0);
+        }
+        return formatNumber(value, Math.abs(value % 1) > 0.01 ? 2 : 0);
+      }
+
+      function formatCompact(value, unit) {
+        if (value === null || value === undefined) return "—";
+        if (unit && unit !== "rub") {
+          return formatAuto(value, unit);
+        }
+        const abs = Math.abs(value);
+        let scaled = value;
+        let suffix = "";
+        let decimals = 0;
+        if (abs >= 1_000_000_000) {
+          scaled = value / 1_000_000_000;
+          suffix = " млрд";
+          decimals = 2;
+        } else if (abs >= 1_000_000) {
+          scaled = value / 1_000_000;
+          suffix = " млн";
+          decimals = 2;
+        } else if (abs >= 1_000) {
+          scaled = value / 1_000;
+          suffix = " тыс";
+          decimals = 1;
+        }
+        return `${formatNumber(scaled, decimals)}${suffix}`;
+      }
+
+      function computeDelta(current, prev) {
+        if (current === null || current === undefined || prev === null || prev === undefined) {
+          return { delta: null, pct: null };
+        }
+        const delta = current - prev;
+        const pct = prev !== 0 ? (delta / prev) * 100 : null;
+        return { delta, pct };
+      }
+
+      function deltaClass(deltaValue) {
+        if (deltaValue === null || deltaValue === undefined) return "";
+        return deltaValue >= 0 ? "delta-positive" : "delta-negative";
+      }
+
+      function buildDeltaLine(label, deltaObj) {
+        const line = document.createElement("div");
+        line.className = "kpi-sub";
+        if (!deltaObj || deltaObj.delta === null || deltaObj.delta === undefined) {
+          line.textContent = `${label}: —`;
+          return line;
+        }
+        const valueSpan = document.createElement("span");
+        valueSpan.textContent = `${formatSigned(deltaObj.delta)} ${
+          deltaObj.pct !== null && deltaObj.pct !== undefined ? `(${formatSignedPercent(deltaObj.pct)})` : ""
+        }`;
+        valueSpan.className = deltaClass(deltaObj.delta);
+        line.textContent = `${label}: `;
+        line.appendChild(valueSpan);
+        return line;
+      }
+
+      function createKpiTile({ title, value, unit, lines }) {
+        const tile = document.createElement("div");
+        tile.className = "kpi-tile";
+        const titleEl = document.createElement("div");
+        titleEl.className = "kpi-title";
+        titleEl.textContent = title;
+        const valueEl = document.createElement("div");
+        valueEl.className = "kpi-value";
+        valueEl.textContent = formatCompact(value, unit);
+        tile.appendChild(titleEl);
+        tile.appendChild(valueEl);
+        (lines || []).forEach((line) => {
+          if (!line) return;
+          if (typeof line === "string") {
+            const div = document.createElement("div");
+            div.className = "kpi-sub";
+            div.textContent = line;
+            tile.appendChild(div);
+          } else {
+            tile.appendChild(line);
+          }
+        });
+        return tile;
+      }
+
+      function renderKpiGrid(container, tiles) {
+        container.innerHTML = "";
+        tiles.forEach((tile) => container.appendChild(tile));
+      }
+
+      function renderEmpty(container, message) {
+        if (!container) return;
+        container.innerHTML = `<div class="empty-state">${message}</div>`;
+      }
+
+      function renderChartCard(container, title, content, subtitle) {
+        container.innerHTML = "";
+        const titleEl = document.createElement("div");
+        titleEl.className = "chart-title";
+        titleEl.textContent = title;
+        container.appendChild(titleEl);
+        if (subtitle) {
+          const subtitleEl = document.createElement("div");
+          subtitleEl.className = "kpi-sub";
+          subtitleEl.textContent = subtitle;
+          container.appendChild(subtitleEl);
+        }
+        if (content) {
+          container.appendChild(content);
+        } else {
+          renderEmpty(container, "Нет данных");
+        }
+      }
+
+      function createSparkline(values, color = "#d99a83") {
+        const numeric = (values || []).filter((v) => typeof v === "number" && !Number.isNaN(v));
+        if (numeric.length === 0) {
+          const div = document.createElement("div");
+          div.className = "empty-state";
+          div.textContent = "Нет данных";
+          return div;
+        }
+        const min = Math.min(...numeric);
+        const max = Math.max(...numeric);
+        const range = max - min || 1;
+        const width = 100;
+        const height = 40;
+        const points = (values || []).map((value, idx) => {
+          const safe = typeof value === "number" ? value : min;
+          const x = values.length === 1 ? width / 2 : (idx / (values.length - 1)) * width;
+          const y = height - ((safe - min) / range) * height;
+          return `${x},${y}`;
+        });
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("class", "sparkline");
+        const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        polyline.setAttribute("fill", "none");
+        polyline.setAttribute("stroke", color);
+        polyline.setAttribute("stroke-width", "2");
+        polyline.setAttribute("points", points.join(" "));
+        svg.appendChild(polyline);
+        return svg;
+      }
+
+      function buildLegend(items) {
+        const legend = document.createElement("div");
+        legend.className = "legend-row";
+        items.forEach((item) => {
+          const pill = document.createElement("span");
+          pill.className = "legend-pill";
+          const dot = document.createElement("span");
+          dot.className = "pill-dot";
+          dot.style.background = item.color;
+          const text = document.createElement("span");
+          text.textContent = item.label;
+          pill.appendChild(dot);
+          pill.appendChild(text);
+          legend.appendChild(pill);
+        });
+        return legend;
+      }
+
+      function createMultiLine(series) {
+        const usable = series.filter((s) => (s.values || []).some((v) => typeof v === "number"));
+        if (usable.length === 0) {
+          const div = document.createElement("div");
+          div.className = "empty-state";
+          div.textContent = "Нет данных";
+          return div;
+        }
+        const width = 100;
+        const height = 48;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("class", "sparkline");
+        usable.forEach((item) => {
+          const values = item.values || [];
+          const numeric = values.filter((v) => typeof v === "number" && !Number.isNaN(v));
+          if (numeric.length === 0) return;
+          const min = Math.min(...numeric);
+          const max = Math.max(...numeric);
+          const range = max - min || 1;
+          const points = values.map((value, idx) => {
+            const safe = typeof value === "number" ? value : min;
+            const x = values.length === 1 ? width / 2 : (idx / (values.length - 1)) * width;
+            const y = height - ((safe - min) / range) * height;
+            return `${x},${y}`;
+          });
+          const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+          polyline.setAttribute("fill", "none");
+          polyline.setAttribute("stroke", item.color || "#d99a83");
+          polyline.setAttribute("stroke-width", "2");
+          polyline.setAttribute("points", points.join(" "));
+          svg.appendChild(polyline);
+        });
+        const wrapper = document.createElement("div");
+        wrapper.appendChild(svg);
+        wrapper.appendChild(
+          buildLegend(
+            usable.map((item) => ({
+              label: item.label,
+              color: item.color || "#d99a83",
+            }))
+          )
+        );
+        return wrapper;
+      }
+
+      function createScatter(points, color = "#d99a83") {
+        if (!points || points.length === 0) {
+          const div = document.createElement("div");
+          div.className = "empty-state";
+          div.textContent = "Нет данных";
+          return div;
+        }
+        const xs = points.map((p) => p.x).filter((v) => typeof v === "number");
+        const ys = points.map((p) => p.y).filter((v) => typeof v === "number");
+        if (!xs.length || !ys.length) {
+          const div = document.createElement("div");
+          div.className = "empty-state";
+          div.textContent = "Нет данных";
+          return div;
+        }
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const rangeX = maxX - minX || 1;
+        const rangeY = maxY - minY || 1;
+        const width = 100;
+        const height = 80;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("class", "scatter");
+        points.forEach((point) => {
+          if (typeof point.x !== "number" || typeof point.y !== "number") return;
+          const cx = ((point.x - minX) / rangeX) * width;
+          const cy = height - ((point.y - minY) / rangeY) * height;
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", cx);
+          circle.setAttribute("cy", cy);
+          circle.setAttribute("r", "3");
+          circle.setAttribute("fill", color);
+          svg.appendChild(circle);
+        });
+        return svg;
+      }
+
+      function sumValues(values) {
+        return (values || []).reduce(
+          (total, value) => total + (typeof value === "number" ? value : 0),
+          0
+        );
+      }
+
+      function formatDayShort(iso) {
+        if (!iso) return "";
+        const date = new Date(iso);
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        return `${day}.${month}`;
+      }
+
+      function formatWeekLabel(week) {
+        if (!week) return "";
+        return `${formatDayShort(week.start)}-${formatDayShort(week.end)}`;
+      }
+
+      function createStackedRows(weeks, valuesMap, codes, title) {
+        const wrapper = document.createElement("div");
+        if (title) {
+          const titleEl = document.createElement("div");
+          titleEl.className = "chart-title";
+          titleEl.textContent = title;
+          wrapper.appendChild(titleEl);
+        }
+        if (!weeks || weeks.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "empty-state";
+          empty.textContent = "Нет данных";
+          wrapper.appendChild(empty);
+          return wrapper;
+        }
+        weeks.forEach((week, idx) => {
+          const row = document.createElement("div");
+          row.className = "stack-row";
+          const label = document.createElement("div");
+          label.className = "stack-label";
+          label.textContent = formatWeekLabel(week);
+          row.appendChild(label);
+          const bar = document.createElement("div");
+          bar.className = "stack-bar";
+          const totals = codes.map((code) => (valuesMap[code] || [])[idx]);
+          const total = sumValues(totals);
+          if (total > 0) {
+            totals.forEach((value, codeIdx) => {
+              const segment = document.createElement("div");
+              segment.style.width = `${(value / total) * 100}%`;
+              segment.style.background = PALETTE[codeIdx % PALETTE.length];
+              bar.appendChild(segment);
+            });
+          }
+          row.appendChild(bar);
+          wrapper.appendChild(row);
+        });
+        wrapper.appendChild(
+          buildLegend(
+            codes.map((code, idx) => ({
+              label: getMetricLabel(code),
+              color: PALETTE[idx % PALETTE.length],
+            }))
+          )
+        );
+        return wrapper;
+      }
+
+      function buildMiniTable(headers, rows) {
+        const table = document.createElement("table");
+        table.className = "mini-table";
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        headers.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          row.forEach((cell, idx) => {
+            const td = document.createElement(idx === 0 ? "th" : "td");
+            if (cell && typeof cell === "object") {
+              td.textContent = cell.text ?? "";
+              if (cell.className) {
+                td.classList.add(cell.className);
+              }
+            } else {
+              td.textContent = cell ?? "";
+            }
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        return table;
+      }
+
+      function renderOverview(data) {
+        if (!data) {
+          renderEmpty(overviewKpis, "Нет данных");
+          return;
+        }
+        const period = data.period_values || {};
+        const monthValues = period.month || {};
+        const prevMonthValues = period.prev_month || {};
+        const yoyMonthValues = period.yoy_month || {};
+        const weekValues = period.week || {};
+        const prevWeekValues = period.prev_week || {};
+        const yoyWeekValues = period.yoy_week || {};
+
+        const tiles = [
+          createKpiTile({
+            title: "Выручка всего",
+            value: monthValues.revenue_total,
+            unit: getMetricUnit("revenue_total"),
+            lines: [
+              buildDeltaLine("Δ неделя", computeDelta(weekValues.revenue_total, prevWeekValues.revenue_total)),
+              buildDeltaLine("Δ год", computeDelta(monthValues.revenue_total, yoyMonthValues.revenue_total)),
+            ],
+          }),
+          createKpiTile({
+            title: "Коворкинг всего",
+            value: monthValues.coworking_total,
+            unit: getMetricUnit("coworking_total"),
+            lines: [
+              `Доля: ${formatAuto(
+                monthValues.coworking_total && monthValues.revenue_total
+                  ? monthValues.coworking_total / monthValues.revenue_total
+                  : null,
+                "pct_ratio"
+              )}`,
+            ],
+          }),
+          createKpiTile({
+            title: "Кофейня всего",
+            value: monthValues.coffee_revenue_total,
+            unit: getMetricUnit("coffee_revenue_total"),
+            lines: [
+              `Чеки: ${formatAuto(monthValues.coffee_checks, getMetricUnit("coffee_checks"))}`,
+              `Средний чек: ${formatAuto(monthValues.avg_check, getMetricUnit("avg_check"))}`,
+            ],
+          }),
+          createKpiTile({
+            title: "Загрузка",
+            value: monthValues.load_percent,
+            unit: getMetricUnit("load_percent"),
+            lines: ["Среднее за месяц"],
+          }),
+          createKpiTile({
+            title: "Порча",
+            value: monthValues.written_off_food_total,
+            unit: getMetricUnit("written_off_food_total"),
+            lines: [
+              `Доля: ${formatAuto(monthValues.writeoff_rate, getMetricUnit("writeoff_rate"))}`,
+            ],
+          }),
+        ];
+        renderKpiGrid(overviewKpis, tiles);
+
+        overviewNotes.innerHTML = "";
+        const notesGrid = document.createElement("div");
+        notesGrid.className = "overview-grid";
+        const notes = [
+          {
+            title: "Сколько заработали",
+            text: `Выручка за месяц: ${formatAuto(monthValues.revenue_total, "rub")}`,
+          },
+          {
+            title: "Где заработали",
+            text: `Коворкинг: ${formatAuto(monthValues.coworking_total, "rub")}, кофейня: ${formatAuto(
+              monthValues.coffee_revenue_total,
+              "rub"
+            )}`,
+          },
+          {
+            title: "Где рост",
+            text: `Δ месяц: ${formatSigned(
+              computeDelta(monthValues.revenue_total, prevMonthValues.revenue_total).delta
+            )}`,
+          },
+          {
+            title: "Где риск",
+            text: data.cash_control && data.cash_control.length
+              ? `Расхождения в кассе: ${data.cash_control.length}`
+              : "Касса без расхождений",
+          },
+          {
+            title: "Где проблема",
+            text: `Порча: ${formatAuto(monthValues.writeoff_rate, "pct_ratio")}`,
+          },
+        ];
+        notes.forEach((note) => {
+          const item = document.createElement("div");
+          item.className = "overview-item";
+          const h3 = document.createElement("h3");
+          h3.textContent = note.title;
+          const p = document.createElement("p");
+          p.textContent = note.text;
+          item.appendChild(h3);
+          item.appendChild(p);
+          notesGrid.appendChild(item);
+        });
+        overviewNotes.appendChild(notesGrid);
+
+        const daily = data.daily || {};
+        const weekly = data.weekly || {};
+        const monthly = data.monthly || {};
+        const weeklyValues = weekly.values || {};
+        const dailyValues = daily.values || {};
+        const monthlyValues = monthly.values || {};
+        const weeks = weekly.weeks || [];
+
+        renderChartCard(
+          revenueDailyChart,
+          "Выручка по дням",
+          createSparkline(dailyValues.revenue_total || [], "#d99a83")
+        );
+        renderChartCard(
+          revenueWeeklyChart,
+          "Выручка по неделям",
+          createSparkline(weeklyValues.revenue_total || [], "#3a3a3a")
+        );
+        renderChartCard(
+          revenueMonthlyChart,
+          "Выручка по месяцам",
+          createSparkline(monthlyValues.revenue_total || [], "#a9836f")
+        );
+
+        if (revenueCompareTable) {
+          const compareRows = (data.revenue_compare || []).map((row) => {
+            const unit = getMetricUnit(row.code);
+            const deltaClassName = deltaClass(row.delta_pct);
+            return [
+              { text: getMetricLabel(row.code) },
+              formatAuto(row.current, unit),
+              formatAuto(row.previous, unit),
+              formatAuto(row.yoy, unit),
+              {
+                text: formatSignedPercent(row.delta_pct),
+                className: deltaClassName,
+              },
+            ];
+          });
+          const header = [
+            "Показатель",
+            `Текущий (${formatMonthLabel(data.month)})`,
+            "Прошлый месяц",
+            "YoY",
+            "Δ%",
+          ];
+          revenueCompareTable.innerHTML = "";
+          revenueCompareTable.appendChild(buildMiniTable(header, compareRows));
+        }
+
+        if (revenuePeriodsTable) {
+          const periodRows = (data.period_compare || []).map((row) => {
+            return [
+              { text: row.label },
+              formatAuto(row.current, "rub"),
+              formatAuto(row.previous, "rub"),
+              formatAuto(row.yoy, "rub"),
+              formatAuto(row.best, "rub"),
+            ];
+          });
+          const header = ["Период", "Текущий", "Прошлый", "YoY", "Лучший"];
+          revenuePeriodsTable.innerHTML = "";
+          revenuePeriodsTable.appendChild(buildMiniTable(header, periodRows));
+        }
+
+        if (coworkingCards) {
+          const cards = COWORKING_CODES.map((code) =>
+            createKpiTile({
+              title: getMetricLabel(code),
+              value: weekValues[code],
+              unit: getMetricUnit(code),
+              lines: [
+                buildDeltaLine("Δ WoW", computeDelta(weekValues[code], prevWeekValues[code])),
+                buildDeltaLine("Δ YoY", computeDelta(weekValues[code], yoyWeekValues[code])),
+              ],
+            })
+          );
+          coworkingCards.innerHTML = "";
+          cards.forEach((card) => coworkingCards.appendChild(card));
+        }
+
+        if (coworkingLineChart) {
+          const series = COWORKING_CODES.map((code, idx) => ({
+            label: getMetricLabel(code),
+            values: weeklyValues[code] || [],
+            color: PALETTE[idx % PALETTE.length],
+          }));
+          renderChartCard(coworkingLineChart, "Направления по неделям", createMultiLine(series));
+        }
+
+        if (coworkingRatioChart) {
+          renderChartCard(
+            coworkingRatioChart,
+            "Лаборатория / Аренда",
+            createSparkline(weeklyValues.lab_to_open_space_ratio || [], "#8b1e1e")
+          );
+        }
+
+        if (coffeeMainCards) {
+          const coffeeCards = [
+            { code: "coffee_revenue_total", label: "Выручка" },
+            { code: "coffee_checks", label: "Чеки" },
+            { code: "avg_check", label: "Средний чек" },
+          ].map((item) =>
+            createKpiTile({
+              title: item.label,
+              value: weekValues[item.code],
+              unit: getMetricUnit(item.code),
+              lines: [
+                buildDeltaLine("Δ WoW", computeDelta(weekValues[item.code], prevWeekValues[item.code])),
+                buildDeltaLine("Δ YoY", computeDelta(weekValues[item.code], yoyWeekValues[item.code])),
+              ],
+            })
+          );
+          coffeeMainCards.innerHTML = "";
+          coffeeCards.forEach((card) => coffeeMainCards.appendChild(card));
+        }
+
+        if (coffeeMainChart) {
+          const series = [
+            {
+              label: "Выручка",
+              values: weeklyValues.coffee_revenue_total || [],
+              color: "#d99a83",
+            },
+            {
+              label: "Чеки",
+              values: weeklyValues.coffee_checks || [],
+              color: "#3a3a3a",
+            },
+            {
+              label: "Средний чек",
+              values: weeklyValues.avg_check || [],
+              color: "#a9836f",
+            },
+          ];
+          renderChartCard(coffeeMainChart, "Динамика кофе", createMultiLine(series));
+        }
+
+        if (coffeeFoodStack) {
+          coffeeFoodStack.innerHTML = "";
+          coffeeFoodStack.appendChild(
+            createStackedRows(weeks, weeklyValues, FOOD_CODES, "Еда: структура по неделям")
+          );
+        }
+
+        if (coffeeDrinkStack) {
+          coffeeDrinkStack.innerHTML = "";
+          coffeeDrinkStack.appendChild(
+            createStackedRows(weeks, weeklyValues, DRINK_CODES, "Напитки: структура по неделям")
+          );
+        }
+
+        if (loadCards) {
+          const loadTiles = [
+            createKpiTile({
+              title: "Загрузка",
+              value: monthValues.load_percent,
+              unit: getMetricUnit("load_percent"),
+              lines: ["Среднее за месяц"],
+            }),
+            createKpiTile({
+              title: "Выручка / %",
+              value: monthValues.revenue_per_load,
+              unit: getMetricUnit("revenue_per_load"),
+              lines: ["Коворкинг"],
+            }),
+            createKpiTile({
+              title: "Кофейня / %",
+              value: monthValues.coffee_revenue_per_load,
+              unit: getMetricUnit("coffee_revenue_per_load"),
+              lines: ["Кофейня"],
+            }),
+          ];
+          loadCards.innerHTML = "";
+          loadTiles.forEach((tile) => loadCards.appendChild(tile));
+        }
+
+        if (loadLineChart) {
+          const series = [
+            {
+              label: "Загрузка",
+              values: weeklyValues.load_percent || [],
+              color: "#3a3a3a",
+            },
+            {
+              label: "Аренда",
+              values: weeklyValues.revenue_open_space || [],
+              color: "#d99a83",
+            },
+          ];
+          renderChartCard(loadLineChart, "Загрузка vs аренда", createMultiLine(series));
+        }
+
+        if (loadScatterOpen) {
+          const points = (weeklyValues.load_percent || []).map((val, idx) => ({
+            x: val,
+            y: (weeklyValues.revenue_open_space || [])[idx],
+          }));
+          renderChartCard(loadScatterOpen, "Scatter: загрузка vs аренда", createScatter(points, "#d99a83"));
+        }
+
+        if (loadScatterCoffee) {
+          const points = (weeklyValues.load_percent || []).map((val, idx) => ({
+            x: val,
+            y: (weeklyValues.coffee_revenue_total || [])[idx],
+          }));
+          renderChartCard(loadScatterCoffee, "Scatter: загрузка vs кофейня", createScatter(points, "#3a3a3a"));
+        }
+
+        if (writeoffChart) {
+          const series = [
+            {
+              label: "Продажи еды",
+              values: weeklyValues.sold_food_total || [],
+              color: "#d99a83",
+            },
+            {
+              label: "Порча",
+              values: weeklyValues.written_off_food_total || [],
+              color: "#8b1e1e",
+            },
+            {
+              label: "Доля порчи",
+              values: weeklyValues.writeoff_rate_full || [],
+              color: "#3a3a3a",
+            },
+          ];
+          renderChartCard(writeoffChart, "Списания и порча", createMultiLine(series));
+        }
+
+        if (writeoffStats) {
+          const writeoffAvg = (weeklyValues.writeoff_rate_full || []).filter((v) => typeof v === "number");
+          const avg = writeoffAvg.length ? writeoffAvg.reduce((a, b) => a + b, 0) / writeoffAvg.length : null;
+          const rows = [
+            ["Текущая доля", formatAuto(weekValues.writeoff_rate_full, "pct_ratio")],
+            ["Среднее 8 недель", formatAuto(avg, "pct_ratio")],
+            ["Норматив", "10%"],
+          ];
+          writeoffStats.innerHTML = "";
+          writeoffStats.appendChild(buildMiniTable(["Показатель", "Значение"], rows));
+        }
+
+        if (cashLineChart) {
+          const series = [
+            {
+              label: "Наличные",
+              values: weeklyValues.revenue_cash || [],
+              color: "#d99a83",
+            },
+            {
+              label: "Безналичные",
+              values: weeklyValues.revenue_cashless || [],
+              color: "#3a3a3a",
+            },
+          ];
+          renderChartCard(cashLineChart, "Динамика оплат", createMultiLine(series));
+        }
+
+        if (cashBarsChart) {
+          cashBarsChart.innerHTML = "";
+          cashBarsChart.appendChild(
+            createStackedRows(weeks, weeklyValues, ["deposit_total", "withdrawals_total"], "Внесения и изъятия")
+          );
+        }
+
+        if (cashControlTable) {
+          const rows = (data.cash_control || []).slice(-10).map((item) => [
+            { text: item.date },
+            formatAuto(item.expected, "rub"),
+            formatAuto(item.actual, "rub"),
+            { text: formatSigned(item.diff), className: deltaClass(item.diff) },
+          ]);
+          cashControlTable.innerHTML = "";
+          cashControlTable.appendChild(buildMiniTable(["Дата", "Ожидалось", "Факт", "Δ"], rows));
+        }
+
+        if (expenseLineChart) {
+          const series = [
+            {
+              label: "Расходы всего",
+              values: weeklyValues.total_expenses || [],
+              color: "#8b1e1e",
+            },
+          ];
+          renderChartCard(expenseLineChart, "Расходы", createMultiLine(series));
+        }
+
+        if (expenseStackChart) {
+          expenseStackChart.innerHTML = "";
+          expenseStackChart.appendChild(
+            createStackedRows(weeks, weeklyValues, EXPENSE_CODES, "Структура расходов")
+          );
+        }
+
+        if (expenseRatioChart) {
+          renderChartCard(
+            expenseRatioChart,
+            "Доля расходов от выручки",
+            createSparkline(weeklyValues.expense_ratio || [], "#8b1e1e")
+          );
+        }
+
+        if (profitChart) {
+          renderChartCard(
+            profitChart,
+            "Операционная прибыль",
+            createSparkline(weeklyValues.operating_profit || [], "#1f5e46")
+          );
+        }
+
+        if (marginChart) {
+          renderChartCard(
+            marginChart,
+            "Операционная маржа",
+            createSparkline(weeklyValues.operating_margin || [], "#1f5e46")
+          );
+        }
+
+        if (signalsTable) {
+          const rows = (data.signals || []).map((signal) => {
+            if (signal.message) {
+              return [
+                { text: signal.message },
+                { text: signal.count ? String(signal.count) : "", className: "" },
+                { text: "" },
+                { text: "" },
+                {
+                  text: signal.status === "alert" ? "ALERT" : "OK",
+                  className: signal.status === "alert" ? "delta-negative" : "delta-positive",
+                },
+              ];
+            }
+            const unit = getMetricUnit(signal.code);
+            return [
+              { text: getMetricLabel(signal.code) },
+              formatAuto(signal.current, unit),
+              {
+                text: formatSignedPercent(signal.delta_pct),
+                className: deltaClass(signal.delta_pct),
+              },
+              { text: signal.threshold ? `-${signal.threshold}%` : "" },
+              {
+                text: signal.status === "alert" ? "ALERT" : "OK",
+                className: signal.status === "alert" ? "delta-negative" : "delta-positive",
+              },
+            ];
+          });
+          const header = ["Сигнал", "Текущее", "Δ%", "Порог", "Статус"];
+          signalsTable.innerHTML = "";
+          signalsTable.appendChild(buildMiniTable(header, rows));
+        }
+      }
+
+      async function loadOverview() {
+        if (!state.branchCode || !state.month) {
+          renderEmpty(overviewKpis, "Нет данных");
+          return;
+        }
+        renderEmpty(overviewKpis, "Загрузка данных...");
+        try {
+          const data = await fetchJSON(
+            `/api/cuteam/overview?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
+              state.month
+            )}`
+          );
+          state.overviewData = data;
+          renderOverview(data);
+        } catch (err) {
+          console.error(err);
+          renderEmpty(overviewKpis, "Не удалось загрузить обзор");
         }
       }
 
@@ -875,7 +2138,7 @@
 
       function buildComparisonTable(base, compare) {
         if (!base || !compare || !base.metrics) {
-          compareTableContainer.innerHTML = '<div class="empty-state">??? ?????? ??? ?????????.</div>';
+          compareTableContainer.innerHTML = '<div class="empty-state">Нет данных для сравнения.</div>';
           return;
         }
 
@@ -889,7 +2152,7 @@
         const headRow = document.createElement("tr");
 
         const thMetric = document.createElement("th");
-        thMetric.textContent = "??????????";
+        thMetric.textContent = "Показатель";
         thMetric.className = "metric-col sticky-col";
         headRow.appendChild(thMetric);
 
@@ -902,11 +2165,11 @@
         headRow.appendChild(thB);
 
         const thDelta = document.createElement("th");
-        thDelta.textContent = "?";
+        thDelta.textContent = "Δ";
         headRow.appendChild(thDelta);
 
         const thDeltaPct = document.createElement("th");
-        thDeltaPct.textContent = "?%";
+        thDeltaPct.textContent = "Δ%";
         headRow.appendChild(thDeltaPct);
 
         thead.appendChild(headRow);
@@ -963,11 +2226,11 @@
         const metrics = base.metrics || [];
         const compareMap = new Map((compare.metrics || []).map((m) => [m.code, m]));
         const header = [
-          "??????????",
+          "Показатель",
           formatMonthLabel(base.month),
           formatMonthLabel(compare.month),
-          "?",
-          "?%",
+          "Δ",
+          "Δ%",
         ];
         const lines = [header.join("	")];
         metrics.forEach((metric) => {
@@ -1018,7 +2281,7 @@
 
       function buildYearTable(data) {
         if (!data || !data.metrics || data.metrics.length === 0) {
-          yearTableContainer.innerHTML = '<div class="empty-state">??? ?????? ??? ??????? ??????.</div>';
+          yearTableContainer.innerHTML = '<div class="empty-state">Нет данных для годовой сводки.</div>';
           return;
         }
 
@@ -1027,18 +2290,18 @@
         const metrics = data.metrics || [];
 
         const monthLabels = {
-          "01": "???",
-          "02": "???",
-          "03": "???",
-          "04": "???",
-          "05": "???",
-          "06": "???",
-          "07": "???",
-          "08": "???",
-          "09": "???",
-          "10": "???",
-          "11": "???",
-          "12": "???",
+          "01": "янв",
+          "02": "фев",
+          "03": "мар",
+          "04": "апр",
+          "05": "май",
+          "06": "июн",
+          "07": "июл",
+          "08": "авг",
+          "09": "сен",
+          "10": "окт",
+          "11": "ноя",
+          "12": "дек",
         };
 
         const table = document.createElement("table");
@@ -1048,7 +2311,7 @@
         const headRow = document.createElement("tr");
 
         const thMetric = document.createElement("th");
-        thMetric.textContent = "??????????";
+        thMetric.textContent = "Показатель";
         thMetric.className = "metric-col sticky-col";
         headRow.appendChild(thMetric);
 
@@ -1084,7 +2347,7 @@
 
             const planRow = document.createElement("tr");
             const planLabel = document.createElement("th");
-            planLabel.textContent = "????";
+            planLabel.textContent = "План";
             planLabel.className = "metric-col sticky-col";
             planRow.appendChild(planLabel);
             months.forEach((month) => {
@@ -1152,21 +2415,21 @@
         const metricMap = new Map(metrics.map((m) => [m.code, m]));
 
         const monthLabels = {
-          "01": "???",
-          "02": "???",
-          "03": "???",
-          "04": "???",
-          "05": "???",
-          "06": "???",
-          "07": "???",
-          "08": "???",
-          "09": "???",
-          "10": "???",
-          "11": "???",
-          "12": "???",
+          "01": "янв",
+          "02": "фев",
+          "03": "мар",
+          "04": "апр",
+          "05": "май",
+          "06": "июн",
+          "07": "июл",
+          "08": "авг",
+          "09": "сен",
+          "10": "окт",
+          "11": "ноя",
+          "12": "дек",
         };
         const header = [
-          "??????????",
+          "Показатель",
           ...months.map((month) => {
             const m = month.slice(5, 7);
             const y = month.slice(2, 4);
@@ -1179,7 +2442,7 @@
           group.metrics.forEach((code) => {
             const metric = metricMap.get(code);
             if (!metric) return;
-            const planRow = ["????", ...months.map((m) => tsvValue(metric.plan[m]))];
+            const planRow = ["План", ...months.map((m) => tsvValue(metric.plan[m]))];
             lines.push(planRow.join("	"));
             const factRow = [metric.label, ...months.map((m) => tsvValue(metric.fact[m]))];
             lines.push(factRow.join("	"));
@@ -1266,7 +2529,7 @@
         const groups = data.groups || {};
 
         const weekCount = weekLabels.length || weeks.length;
-        const totalCols = 2 + weekCount + 3;
+        const totalCols = 2 + weekCount + 1;
 
         const table = document.createElement("table");
         table.className = "d1-table";
@@ -1306,16 +2569,6 @@
         thMonth.textContent = "Итого месяц";
         thMonth.className = "month-total";
         headRow.appendChild(thMonth);
-
-        const thPlan = document.createElement("th");
-        thPlan.textContent = "План месяц";
-        thPlan.className = "plan-col";
-        headRow.appendChild(thPlan);
-
-        const thFact = document.createElement("th");
-        thFact.textContent = "Факт vs План";
-        thFact.className = "plan-col";
-        headRow.appendChild(thFact);
 
         thead.appendChild(headRow);
         table.appendChild(thead);
@@ -1369,44 +2622,6 @@
           monthTd.className = "month-total";
           monthTd.textContent = formatValue(metric.month_total, metric.unit);
           row.appendChild(monthTd);
-
-          const planTd = document.createElement("td");
-          planTd.className = "plan-col";
-          if (metric.plan_enabled) {
-            const input = document.createElement("input");
-            input.type = "number";
-            input.step = "0.01";
-            input.value = metric.plan ?? "";
-            input.dataset.metricCode = metric.code;
-            input.addEventListener("blur", async (event) => {
-              const nextValue = Number(event.target.value || 0);
-              try {
-                await savePlan(metric.code, nextValue, state.summaryMonth || state.month);
-                updatePlanLocal(metric.code, nextValue);
-                setPlanStatus("План сохранён");
-                buildTable(state.data);
-              } catch (err) {
-                console.error(err);
-                setPlanStatus("Ошибка сохранения", true);
-              }
-            });
-            input.addEventListener("keydown", (event) => {
-              if (event.key === "Enter") event.target.blur();
-            });
-            planTd.appendChild(input);
-          }
-          row.appendChild(planTd);
-
-          const factTd = document.createElement("td");
-          factTd.className = "plan-col";
-          if (metric.plan_enabled) {
-            const summary = formatPlanSummary(metric.plan_pct, metric.plan_delta);
-            factTd.textContent = summary;
-            if (metric.plan_delta !== null && metric.plan_delta !== undefined) {
-              factTd.classList.add(metric.plan_delta >= 0 ? "delta-positive" : "delta-negative");
-            }
-          }
-          row.appendChild(factTd);
 
           tbody.appendChild(row);
         });
@@ -1500,7 +2715,7 @@
       }
 
       async function loadData() {
-        await Promise.all([loadSummary(), loadRaw(), loadComparison(), loadYearSummary()]);
+        await Promise.all([loadSummary(), loadRaw(), loadComparison(), loadYearSummary(), loadOverview()]);
       }
 
 
