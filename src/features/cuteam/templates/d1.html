@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
@@ -110,6 +110,7 @@
         text-align: right;
         white-space: nowrap;
         font-family: var(--font-body);
+        font-variant-numeric: tabular-nums;
       }
 
       .d1-table thead th {
@@ -192,6 +193,37 @@
         min-width: 70px;
       }
 
+      .year-table td {
+        min-width: 78px;
+      }
+
+      .year-table tr.metric-row th.metric-col {
+        font-weight: 600;
+      }
+
+      .year-table tr.plan-row th.metric-col {
+        font-weight: 500;
+        color: var(--muted);
+      }
+
+      .year-table tr.plan-row td {
+        color: var(--muted);
+      }
+
+      .year-table tr.plan-row td,
+      .year-table tr.plan-row th {
+        border-bottom: 2px solid var(--border-soft);
+      }
+
+      .year-table tr.pair-odd td,
+      .year-table tr.pair-odd th {
+        background: rgba(233, 189, 166, 0.08);
+      }
+
+      .year-table td.plan-col {
+        background: transparent;
+      }
+
       .raw-table th.metric-col {
         min-width: 280px;
         max-width: 320px;
@@ -230,12 +262,19 @@
 
       .d1-table td.plan-col input {
         width: 100%;
-        border: 1px solid var(--border);
-        background: var(--card);
-        padding: 6px 8px;
-        border-radius: 8px;
+        border: none;
+        border-bottom: 1px dashed var(--border);
+        background: transparent;
+        padding: 2px 0;
+        border-radius: 0;
         font-size: 12px;
         text-align: right;
+      }
+
+      .d1-table td.plan-col input:focus {
+        outline: none;
+        border-bottom-color: var(--accent);
+        background: rgba(247, 201, 118, 0.18);
       }
 
       .plan-status {
@@ -2408,6 +2447,7 @@
         const tbody = document.createElement("tbody");
 
         const metricMap = new Map(metrics.map((m) => [m.code, m]));
+        let pairIndex = 0;
 
         groups.forEach((group) => {
           const groupRow = document.createElement("tr");
@@ -2422,8 +2462,33 @@
           group.metrics.forEach((code) => {
             const metric = metricMap.get(code);
             if (!metric) return;
+            const pairClass = pairIndex % 2 === 0 ? "pair-even" : "pair-odd";
+
+            const factRow = document.createElement("tr");
+            factRow.className = `metric-row ${pairClass}`;
+            const factLabel = document.createElement("th");
+            factLabel.textContent = metric.label;
+            factLabel.className = "metric-col sticky-col";
+            factRow.appendChild(factLabel);
+            months.forEach((month) => {
+              const td = document.createElement("td");
+              const factValue = metric.fact[month];
+              const planValue = metric.plan[month];
+              setCellValue(td, factValue, formatRawValue);
+              if (
+                planValue !== null &&
+                planValue !== undefined &&
+                factValue !== null &&
+                factValue !== undefined
+              ) {
+                td.classList.add(factValue >= planValue ? "fact-above" : "fact-below");
+              }
+              factRow.appendChild(td);
+            });
+            tbody.appendChild(factRow);
 
             const planRow = document.createElement("tr");
+            planRow.className = `plan-row ${pairClass}`;
             const planLabel = document.createElement("th");
             planLabel.textContent = "План";
             planLabel.className = "metric-col sticky-col";
@@ -2455,28 +2520,7 @@
               planRow.appendChild(td);
             });
             tbody.appendChild(planRow);
-
-            const factRow = document.createElement("tr");
-            const factLabel = document.createElement("th");
-            factLabel.textContent = metric.label;
-            factLabel.className = "metric-col sticky-col";
-            factRow.appendChild(factLabel);
-            months.forEach((month) => {
-              const td = document.createElement("td");
-              const factValue = metric.fact[month];
-              const planValue = metric.plan[month];
-              setCellValue(td, factValue, formatRawValue);
-              if (
-                planValue !== null &&
-                planValue !== undefined &&
-                factValue !== null &&
-                factValue !== undefined
-              ) {
-                td.classList.add(factValue >= planValue ? "fact-above" : "fact-below");
-              }
-              factRow.appendChild(td);
-            });
-            tbody.appendChild(factRow);
+            pairIndex += 1;
           });
         });
 
@@ -2896,3 +2940,4 @@
     </script>
   </body>
 </html>
+
