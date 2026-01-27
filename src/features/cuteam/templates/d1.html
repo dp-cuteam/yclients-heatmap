@@ -136,17 +136,22 @@
         position: sticky;
         left: 0;
         background: var(--card);
-        z-index: 4;
+        z-index: 6;
         box-shadow: 2px 0 0 var(--border-soft);
       }
 
       .sticky-col.unit-col {
         left: 230px;
-        z-index: 4;
+        z-index: 6;
       }
 
       .d1-table thead th.sticky-col {
-        z-index: 7;
+        z-index: 9;
+      }
+
+      .d1-table th.sticky-col,
+      .d1-table td.sticky-col {
+        background: var(--card);
       }
 
       .raw-table th,
@@ -342,6 +347,14 @@
         font-weight: 700;
         border-top: 2px solid var(--border);
         background: rgba(233, 189, 166, 0.18);
+      }
+
+      .raw-table .raw-block th.sticky-col {
+        background: #f3e0d3;
+      }
+
+      .group-row th.sticky-col {
+        background: #f3e0d3;
       }
 
       .raw-block + tr td,
