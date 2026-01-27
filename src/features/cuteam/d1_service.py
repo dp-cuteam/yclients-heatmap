@@ -123,6 +123,17 @@ def _branch_name_map() -> Dict[str, str]:
     return mapping
 
 
+def _branch_codes_from_data() -> List[str]:
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT branch_code AS code FROM manual_sheet_daily"
+            ).fetchall()
+    except Exception:
+        return []
+    return [row["code"] for row in rows if row.get("code")]
+
+
 def _metric_reference() -> tuple[List[str], Dict[str, str]]:
     path = settings.metric_mapping_path
     if not path.exists():
@@ -163,21 +174,29 @@ def list_branches() -> List[Dict[str, Any]]:
     except Exception:
         return _fallback_branches()
     name_map = _branch_name_map()
-    if not rows:
-        branches = _fallback_branches()
-    else:
-        branches = [
-            {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
-            for row in rows
-        ]
-    branches = [
+    branches: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        code = row["code"]
+        branches[code] = {"code": code, "name": name_map.get(code, row["name"])}
+    if not branches:
+        for fallback in _fallback_branches():
+            code = fallback.get("code")
+            if code:
+                branches.setdefault(code, fallback)
+    for code in _branch_codes_from_data():
+        if code in branches:
+            continue
+        branches[code] = {"code": code, "name": name_map.get(code, code)}
+    branches_list = [
         branch
-        for branch in branches
+        for branch in branches.values()
         if branch.get("code") not in IGNORE_BRANCH_CODES
         and branch.get("name") not in IGNORE_BRANCH_CODES
     ]
-    branches.sort(key=lambda row: (BRANCH_ORDER_INDEX.get(row["name"], 999), row["name"]))
-    return branches
+    branches_list.sort(
+        key=lambda row: (BRANCH_ORDER_INDEX.get(row["name"], 999), row["name"])
+    )
+    return branches_list
 
 
 def list_months(branch_code: str) -> List[str]:
@@ -313,7 +332,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
             (branch_code,),
         ).fetchone()
     if not row:
-        return None
+        return {"code": branch_code, "name": name_map.get(branch_code, branch_code)}
     return {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
 
 
