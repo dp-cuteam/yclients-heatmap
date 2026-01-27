@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from .db import get_conn, init_schema
+from .heatmap_load import fetch_hairdresser_daily_load
 from .metrics import D1_METRICS, GROUP_LABELS, PLAN_METRIC_CODES
 from .settings import settings
 
@@ -289,6 +290,9 @@ def _fetch_daily_values(
         rows = conn.execute(sql, params).fetchall()
     for row in rows:
         values.setdefault(row["metric_code"], {})[row["date"]] = float(row["value"])
+    heatmap_values = fetch_hairdresser_daily_load(branch_code, start_date, end_date)
+    if heatmap_values:
+        values["load_percent"] = heatmap_values
     return values
 
 
@@ -304,6 +308,9 @@ def _fetch_raw_values(branch_code: str, start_date: str, end_date: str) -> Dict[
         rows = conn.execute(sql, params).fetchall()
     for row in rows:
         values.setdefault(row["metric_code"], {})[row["date"]] = float(row["value"])
+    heatmap_values = fetch_hairdresser_daily_load(branch_code, start_date, end_date)
+    if heatmap_values:
+        values["load_percent"] = heatmap_values
     return values
 
 
@@ -374,12 +381,12 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         label_idx = len(prev_week_ranges) - idx
         start = dt.date.fromisoformat(week["start"])
         end = dt.date.fromisoformat(week["end"])
-        week_labels.append(f"??? -{label_idx} ({start:%d.%m}?{end:%d.%m})")
+        week_labels.append(f"Нед -{label_idx} ({start:%d.%m}–{end:%d.%m})")
     for idx, week in enumerate(curr_week_ranges):
         label_idx = idx + 1
         start = dt.date.fromisoformat(week["start"])
         end = dt.date.fromisoformat(week["end"])
-        week_labels.append(f"??? {label_idx} ({start:%d.%m}?{end:%d.%m})")
+        week_labels.append(f"Нед {label_idx} ({start:%d.%m}–{end:%d.%m})")
 
     start_iso = prev_days[0].isoformat()
     end_iso = curr_days[-1].isoformat()

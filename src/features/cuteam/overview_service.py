@@ -12,6 +12,7 @@ from .d1_service import (
     _parse_month,
     _prev_month_start,
 )
+from .heatmap_load import fetch_hairdresser_daily_load
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
@@ -147,6 +148,10 @@ def _fetch_values(
         rows = conn.execute(sql, params).fetchall()
     for row in rows:
         values.setdefault(row["metric_code"], {})[row["date"]] = float(row["value"])
+    if "load_percent" in codes:
+        heatmap_values = fetch_hairdresser_daily_load(branch_code, start_date, end_date)
+        if heatmap_values:
+            values["load_percent"] = heatmap_values
     return values
 
 

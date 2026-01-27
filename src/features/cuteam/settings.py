@@ -27,6 +27,10 @@ class CuteamSettings:
     db_url: str | None
     db_url_env: str | None
     db_path: Path
+    heatmap_db_url: str | None
+    heatmap_db_path: Path
+    heatmap_groups_path: Path
+    heatmap_groups_resolved_path: Path
     schema_path: Path
     branch_mapping_path: Path
     metric_mapping_path: Path
@@ -43,6 +47,25 @@ def load_settings() -> CuteamSettings:
         if db_url:
             db_url_env = "DATABASE_URL"
     db_path = _resolve_path(os.getenv("CUTEAM_DB_PATH", str(data_dir / "cuteam.db")), ROOT_DIR)
+    heatmap_db_url = (
+        os.getenv("HEATMAP_DATABASE_URL")
+        or os.getenv("HEATMAP_DB_URL")
+        or os.getenv("DATABASE_URL")
+    )
+    heatmap_db_path = _resolve_path(
+        os.getenv("HEATMAP_DB_PATH", os.getenv("DB_PATH", str(data_dir / "app.db"))),
+        ROOT_DIR,
+    )
+    heatmap_groups_path = _resolve_path(
+        os.getenv("HEATMAP_GROUPS_PATH", str(ROOT_DIR / "config" / "groups.json")),
+        ROOT_DIR,
+    )
+    heatmap_groups_resolved_path = _resolve_path(
+        os.getenv(
+            "HEATMAP_GROUPS_RESOLVED_PATH", str(ROOT_DIR / "config" / "groups_resolved.json")
+        ),
+        ROOT_DIR,
+    )
     indicators_dir = ROOT_DIR / INDICATORS_DIR_NAME
     schema_path = indicators_dir / "shared" / "db" / "schema.sql"
     branch_mapping_path = indicators_dir / "data" / "branch_mapping.json"
@@ -53,6 +76,10 @@ def load_settings() -> CuteamSettings:
         db_url=db_url.strip() if db_url else None,
         db_url_env=db_url_env,
         db_path=db_path,
+        heatmap_db_url=heatmap_db_url.strip() if heatmap_db_url else None,
+        heatmap_db_path=heatmap_db_path,
+        heatmap_groups_path=heatmap_groups_path,
+        heatmap_groups_resolved_path=heatmap_groups_resolved_path,
         schema_path=schema_path,
         branch_mapping_path=branch_mapping_path,
         metric_mapping_path=metric_mapping_path,

@@ -109,6 +109,7 @@
         line-height: 1.2;
         text-align: right;
         white-space: nowrap;
+        font-family: var(--font-body);
       }
 
       .d1-table thead th {
@@ -274,6 +275,11 @@
 
       .delta-negative {
         color: #8b1e1e;
+        font-weight: 600;
+      }
+
+      .zero-value {
+        color: var(--accent);
         font-weight: 600;
       }
 
@@ -520,7 +526,7 @@
           <div>
             <div class="eyebrow">Свод</div>
             <h2 class="card-title">Агрегированные показатели в динамике</h2>
-            <div class="card-subtitle">5 недель до месяца и 5 недель выбранного месяца</div>
+            <div class="card-subtitle">Недели предыдущего месяца и выбранного месяца (если 6 недель — последние 5)</div>
           </div>
           <div class="card-actions">
             <button class="ghost" id="summaryCopyBtn" type="button">Скопировать TSV</button>
@@ -793,41 +799,54 @@
         }).format(value);
       }
 
+      function valueOrZero(value) {
+        if (value === null || value === undefined || Number.isNaN(value)) return 0;
+        return value;
+      }
+
+      function isZeroLike(value) {
+        return valueOrZero(value) === 0;
+      }
+
+      function applyZeroClass(element, value) {
+        if (isZeroLike(value)) element.classList.add("zero-value");
+      }
+
       function formatValue(value, unit) {
-        if (value === null || value === undefined) return "";
+        const safe = valueOrZero(value);
         if (unit === "pct") {
-          return `${formatNumber(value, 1)}%`;
+          return `${formatNumber(safe, 1)}%`;
         }
         if (unit === "ratio") {
-          return formatNumber(value, 2);
+          return formatNumber(safe, 2);
         }
         if (unit === "rub") {
-          return formatNumber(value, Math.abs(value % 1) > 0.01 ? 2 : 0);
+          return formatNumber(safe, Math.abs(safe % 1) > 0.01 ? 2 : 0);
         }
         if (unit === "qty") {
-          return formatNumber(value, 0);
+          return formatNumber(safe, 0);
         }
-        return formatNumber(value, 0);
+        return formatNumber(safe, 0);
       }
 
       function formatRawValue(value) {
-        if (value === null || value === undefined) return "";
-        const decimals = Math.abs(value % 1) > 0.01 ? 2 : 0;
-        return formatNumber(value, decimals);
+        const safe = valueOrZero(value);
+        const decimals = Math.abs(safe % 1) > 0.01 ? 2 : 0;
+        return formatNumber(safe, decimals);
       }
 
       function formatSigned(value) {
-        if (value === null || value === undefined) return "";
-        if (value === 0) return "0";
-        const sign = value > 0 ? "+" : "-";
-        return `${sign}${formatRawValue(Math.abs(value))}`;
+        const safe = valueOrZero(value);
+        if (safe === 0) return "0";
+        const sign = safe > 0 ? "+" : "-";
+        return `${sign}${formatRawValue(Math.abs(safe))}`;
       }
 
       function formatSignedPercent(value) {
-        if (value === null || value === undefined) return "";
-        if (value === 0) return "0%";
-        const sign = value > 0 ? "+" : "-";
-        return `${sign}${formatNumber(Math.abs(value), 1)}%`;
+        const safe = valueOrZero(value);
+        if (safe === 0) return "0%";
+        const sign = safe > 0 ? "+" : "-";
+        return `${sign}${formatNumber(Math.abs(safe), 1)}%`;
       }
 
       function formatPlanSummary(planPct, planDelta) {
@@ -854,9 +873,8 @@
       }
 
       function tsvValue(value) {
-        if (value === null || value === undefined) return "";
-        if (Number.isNaN(value)) return "";
-        return String(value);
+        const safe = valueOrZero(value);
+        return String(safe);
       }
 
       function buildRawTSV(data) {
@@ -1134,45 +1152,54 @@
       }
 
       function formatAuto(value, unit) {
-        if (value === null || value === undefined) return "—";
+        const safe = valueOrZero(value);
         if (unit === "pct_ratio") {
-          return `${formatNumber(value * 100, 1)}%`;
+          return `${formatNumber(safe * 100, 1)}%`;
         }
         if (unit === "pct") {
-          return `${formatNumber(value, 1)}%`;
+          return `${formatNumber(safe, 1)}%`;
         }
         if (unit === "ratio") {
-          return formatNumber(value, 2);
+          return formatNumber(safe, 2);
         }
         if (unit === "qty") {
-          return formatNumber(value, 0);
+          return formatNumber(safe, 0);
         }
-        return formatNumber(value, Math.abs(value % 1) > 0.01 ? 2 : 0);
+        return formatNumber(safe, Math.abs(safe % 1) > 0.01 ? 2 : 0);
       }
 
       function formatCompact(value, unit) {
-        if (value === null || value === undefined) return "—";
+        const safe = valueOrZero(value);
         if (unit && unit !== "rub") {
-          return formatAuto(value, unit);
+          return formatAuto(safe, unit);
         }
-        const abs = Math.abs(value);
-        let scaled = value;
+        const abs = Math.abs(safe);
+        let scaled = safe;
         let suffix = "";
-        let decimals = 0;
-        if (abs >= 1_000_000_000) {
-          scaled = value / 1_000_000_000;
-          suffix = " млрд";
-          decimals = 2;
-        } else if (abs >= 1_000_000) {
-          scaled = value / 1_000_000;
-          suffix = " млн";
-          decimals = 2;
-        } else if (abs >= 1_000) {
-          scaled = value / 1_000;
-          suffix = " тыс";
-          decimals = 1;
+        if (abs >= 1000000) {
+          scaled = safe / 1000000;
+          suffix = "M";
+        } else if (abs >= 1000) {
+          scaled = safe / 1000;
+          suffix = "k";
         }
-        return `${formatNumber(scaled, decimals)}${suffix}`;
+        return `${formatNumber(scaled, abs >= 1000000 ? 2 : 1)}${suffix}`;
+      }
+
+      function setCellValue(cell, value, formatter = formatRawValue, highlightZero = false) {
+        const safe = valueOrZero(value);
+        cell.textContent = formatter(safe);
+        if (highlightZero) {
+          applyZeroClass(cell, safe);
+        }
+      }
+
+      function buildValueCell(value, formatter) {
+        const safe = valueOrZero(value);
+        return {
+          text: formatter(safe),
+          className: safe === 0 ? "zero-value" : "",
+        };
       }
 
       function computeDelta(current, prev) {
@@ -1185,15 +1212,17 @@
       }
 
       function deltaClass(deltaValue) {
-        if (deltaValue === null || deltaValue === undefined) return "";
-        return deltaValue >= 0 ? "delta-positive" : "delta-negative";
+        if (deltaValue === null || deltaValue === undefined) return "zero-value";
+        if (deltaValue === 0) return "zero-value";
+        return deltaValue > 0 ? "delta-positive" : "delta-negative";
       }
 
       function buildDeltaLine(label, deltaObj) {
         const line = document.createElement("div");
         line.className = "kpi-sub";
         if (!deltaObj || deltaObj.delta === null || deltaObj.delta === undefined) {
-          line.textContent = `${label}: —`;
+          line.textContent = `${label}: 0`;
+          line.classList.add("zero-value");
           return line;
         }
         const valueSpan = document.createElement("span");
@@ -1214,7 +1243,9 @@
         titleEl.textContent = title;
         const valueEl = document.createElement("div");
         valueEl.className = "kpi-value";
-        valueEl.textContent = formatCompact(value, unit);
+        const safeValue = valueOrZero(value);
+        valueEl.textContent = formatCompact(safeValue, unit);
+        applyZeroClass(valueEl, safeValue);
         tile.appendChild(titleEl);
         tile.appendChild(valueEl);
         (lines || []).forEach((line) => {
@@ -1630,14 +1661,15 @@
         if (revenueCompareTable) {
           const compareRows = (data.revenue_compare || []).map((row) => {
             const unit = getMetricUnit(row.code);
-            const deltaClassName = deltaClass(row.delta_pct);
+            const deltaSafe = valueOrZero(row.delta_pct);
+            const deltaClassName = deltaClass(deltaSafe);
             return [
               { text: getMetricLabel(row.code) },
-              formatAuto(row.current, unit),
-              formatAuto(row.previous, unit),
-              formatAuto(row.yoy, unit),
+              buildValueCell(row.current, (value) => formatAuto(value, unit)),
+              buildValueCell(row.previous, (value) => formatAuto(value, unit)),
+              buildValueCell(row.yoy, (value) => formatAuto(value, unit)),
               {
-                text: formatSignedPercent(row.delta_pct),
+                text: formatSignedPercent(deltaSafe),
                 className: deltaClassName,
               },
             ];
@@ -1657,10 +1689,10 @@
           const periodRows = (data.period_compare || []).map((row) => {
             return [
               { text: row.label },
-              formatAuto(row.current, "rub"),
-              formatAuto(row.previous, "rub"),
-              formatAuto(row.yoy, "rub"),
-              formatAuto(row.best, "rub"),
+              buildValueCell(row.current, (value) => formatAuto(value, "rub")),
+              buildValueCell(row.previous, (value) => formatAuto(value, "rub")),
+              buildValueCell(row.yoy, (value) => formatAuto(value, "rub")),
+              buildValueCell(row.best, (value) => formatAuto(value, "rub")),
             ];
           });
           const header = ["Период", "Текущий", "Прошлый", "YoY", "Лучший"];
@@ -1838,9 +1870,9 @@
           const writeoffAvg = (weeklyValues.writeoff_rate_full || []).filter((v) => typeof v === "number");
           const avg = writeoffAvg.length ? writeoffAvg.reduce((a, b) => a + b, 0) / writeoffAvg.length : null;
           const rows = [
-            ["Текущая доля", formatAuto(weekValues.writeoff_rate_full, "pct_ratio")],
-            ["Среднее 8 недель", formatAuto(avg, "pct_ratio")],
-            ["Норматив", "10%"],
+            [{ text: "Текущая доля" }, buildValueCell(weekValues.writeoff_rate_full, (value) => formatAuto(value, "pct_ratio"))],
+            [{ text: "Среднее 8 недель" }, buildValueCell(avg, (value) => formatAuto(value, "pct_ratio"))],
+            [{ text: "Норматив" }, { text: "10%" }],
           ];
           writeoffStats.innerHTML = "";
           writeoffStats.appendChild(buildMiniTable(["Показатель", "Значение"], rows));
@@ -1870,12 +1902,15 @@
         }
 
         if (cashControlTable) {
-          const rows = (data.cash_control || []).slice(-10).map((item) => [
-            { text: item.date },
-            formatAuto(item.expected, "rub"),
-            formatAuto(item.actual, "rub"),
-            { text: formatSigned(item.diff), className: deltaClass(item.diff) },
-          ]);
+          const rows = (data.cash_control || []).slice(-10).map((item) => {
+            const diffSafe = valueOrZero(item.diff);
+            return [
+              { text: item.date },
+              buildValueCell(item.expected, (value) => formatAuto(value, "rub")),
+              buildValueCell(item.actual, (value) => formatAuto(value, "rub")),
+              { text: formatSigned(diffSafe), className: deltaClass(diffSafe) },
+            ];
+          });
           cashControlTable.innerHTML = "";
           cashControlTable.appendChild(buildMiniTable(["Дата", "Ожидалось", "Факт", "Δ"], rows));
         }
@@ -1925,9 +1960,13 @@
         if (signalsTable) {
           const rows = (data.signals || []).map((signal) => {
             if (signal.message) {
+              const countSafe = valueOrZero(signal.count);
               return [
                 { text: signal.message },
-                { text: signal.count ? String(signal.count) : "", className: "" },
+                {
+                  text: String(countSafe),
+                  className: countSafe === 0 ? "zero-value" : "",
+                },
                 { text: "" },
                 { text: "" },
                 {
@@ -1937,12 +1976,13 @@
               ];
             }
             const unit = getMetricUnit(signal.code);
+            const deltaSafe = valueOrZero(signal.delta_pct);
             return [
               { text: getMetricLabel(signal.code) },
-              formatAuto(signal.current, unit),
+              buildValueCell(signal.current, (value) => formatAuto(value, unit)),
               {
-                text: formatSignedPercent(signal.delta_pct),
-                className: deltaClass(signal.delta_pct),
+                text: formatSignedPercent(deltaSafe),
+                className: deltaClass(deltaSafe),
               },
               { text: signal.threshold ? `-${signal.threshold}%` : "" },
               {
@@ -2109,14 +2149,14 @@
           weekIndex = 0;
           metric.values.forEach((value) => {
             const td = document.createElement("td");
-            td.textContent = formatRawValue(value);
+            setCellValue(td, value, formatRawValue);
             row.appendChild(td);
 
             if (weekIndex < weeks.length && idx === weeks[weekIndex].end_idx) {
               const weekTd = document.createElement("td");
               weekTd.className = "week-total";
               const weekValue = metric.week_totals[weekIndex];
-              weekTd.textContent = formatRawValue(weekValue);
+              setCellValue(weekTd, weekValue, formatRawValue);
               row.appendChild(weekTd);
               weekIndex += 1;
             }
@@ -2125,7 +2165,7 @@
 
           const monthTd = document.createElement("td");
           monthTd.className = "month-total";
-          monthTd.textContent = formatRawValue(metric.month_total);
+          setCellValue(monthTd, metric.month_total, formatRawValue);
           row.appendChild(monthTd);
 
           tbody.appendChild(row);
@@ -2195,22 +2235,25 @@
             valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
 
           const tdA = document.createElement("td");
-          tdA.textContent = formatRawValue(valueA);
+          setCellValue(tdA, valueA, formatRawValue);
           row.appendChild(tdA);
 
           const tdB = document.createElement("td");
-          tdB.textContent = formatRawValue(valueB);
+          setCellValue(tdB, valueB, formatRawValue);
           row.appendChild(tdB);
 
           const tdDelta = document.createElement("td");
-          tdDelta.textContent = formatSigned(delta);
-          if (delta !== null) tdDelta.classList.add(delta >= 0 ? "delta-positive" : "delta-negative");
+          const deltaSafe = valueOrZero(delta);
+          tdDelta.textContent = formatSigned(deltaSafe);
+          if (deltaSafe > 0) tdDelta.classList.add("delta-positive");
+          if (deltaSafe < 0) tdDelta.classList.add("delta-negative");
           row.appendChild(tdDelta);
 
           const tdDeltaPct = document.createElement("td");
-          tdDeltaPct.textContent = formatSignedPercent(deltaPct);
-          if (deltaPct !== null)
-            tdDeltaPct.classList.add(deltaPct >= 0 ? "delta-positive" : "delta-negative");
+          const deltaPctSafe = valueOrZero(deltaPct);
+          tdDeltaPct.textContent = formatSignedPercent(deltaPctSafe);
+          if (deltaPctSafe > 0) tdDeltaPct.classList.add("delta-positive");
+          if (deltaPctSafe < 0) tdDeltaPct.classList.add("delta-negative");
           row.appendChild(tdDeltaPct);
 
           tbody.appendChild(row);
@@ -2240,12 +2283,14 @@
           const delta = valueA !== null && valueB !== null ? valueA - valueB : null;
           const deltaPct =
             valueB !== null && valueB !== 0 && delta !== null ? (delta / valueB) * 100 : null;
+          const deltaSafe = valueOrZero(delta);
           const deltaValue =
-            delta !== null ? (delta > 0 ? `+${delta}` : String(delta)) : "";
+            deltaSafe === 0 ? "0" : deltaSafe > 0 ? `+${deltaSafe}` : String(deltaSafe);
+          const deltaPctSafe = valueOrZero(deltaPct);
           const deltaPctValue =
-            deltaPct !== null
-              ? `${deltaPct > 0 ? "+" : ""}${deltaPct.toFixed(2)}`
-              : "";
+            deltaPctSafe === 0
+              ? "0"
+              : `${deltaPctSafe > 0 ? "+" : ""}${deltaPctSafe.toFixed(2)}`;
           lines.push(
             [
               metric.label,
@@ -2387,7 +2432,7 @@
               const td = document.createElement("td");
               const factValue = metric.fact[month];
               const planValue = metric.plan[month];
-              td.textContent = formatRawValue(factValue);
+              setCellValue(td, factValue, formatRawValue);
               if (
                 planValue !== null &&
                 planValue !== undefined &&
@@ -2614,13 +2659,13 @@
           metric.week_totals.forEach((value) => {
             const td = document.createElement("td");
             td.className = "week-total";
-            td.textContent = formatValue(value, metric.unit);
+            setCellValue(td, value, (v) => formatValue(v, metric.unit));
             row.appendChild(td);
           });
 
           const monthTd = document.createElement("td");
           monthTd.className = "month-total";
-          monthTd.textContent = formatValue(metric.month_total, metric.unit);
+          setCellValue(monthTd, metric.month_total, (v) => formatValue(v, metric.unit));
           row.appendChild(monthTd);
 
           tbody.appendChild(row);
