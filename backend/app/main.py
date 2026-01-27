@@ -4,9 +4,12 @@ from datetime import date, datetime, timedelta, time as dt_time
 from dataclasses import asdict
 from zoneinfo import ZoneInfo
 from pathlib import Path
+from functools import lru_cache
 
 import json
 import logging
+import os
+import subprocess
 import time
 from typing import Any
 
@@ -38,6 +41,32 @@ from src.features.cuteam import admin_service as cuteam_admin
 from src.features.cuteam.views import router as cuteam_views
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+
+@lru_cache
+def _current_commit() -> str:
+    env_keys = (
+        "RENDER_GIT_COMMIT",
+        "RENDER_COMMIT",
+        "SOURCE_VERSION",
+        "GIT_COMMIT",
+        "COMMIT_SHA",
+        "VERCEL_GIT_COMMIT_SHA",
+    )
+    for key in env_keys:
+        value = os.getenv(key)
+        if value:
+            value = value.strip()
+            return value[:7] if len(value) > 7 else value
+    try:
+        repo_root = BASE_DIR.parent
+        result = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(repo_root),
+            text=True,
+        ).strip()
+        return result or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
 
 app = FastAPI(title="CUTEAM Heatmap")
 logging.basicConfig(level=logging.INFO)
@@ -585,7 +614,10 @@ def historical_page(request: Request):
 def admin_page(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(
+        "admin.html",
+        {"request": request, "commit": _current_commit()},
+    )
 
 @app.get("/summary", response_class=HTMLResponse)
 def summary_page(request: Request):
