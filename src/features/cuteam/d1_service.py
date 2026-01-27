@@ -367,31 +367,19 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         for chunk in curr_chunks
     ]
 
-    prev_pad = max(0, 5 - len(prev_week_ranges))
-    curr_pad = max(0, 5 - len(curr_week_ranges))
-    week_ranges: List[Optional[Dict[str, str]]] = (
-        [None] * prev_pad + prev_week_ranges + curr_week_ranges + [None] * curr_pad
-    )
+    week_ranges = prev_week_ranges + curr_week_ranges
 
     week_labels: List[str] = []
-    for idx in range(5):
-        label_idx = 5 - idx
-        if idx < prev_pad:
-            week_labels.append(f"Нед -{label_idx} ()")
-        else:
-            week = prev_week_ranges[idx - prev_pad]
-            start = dt.date.fromisoformat(week["start"])
-            end = dt.date.fromisoformat(week["end"])
-            week_labels.append(f"Нед -{label_idx} ({start:%d.%m}–{end:%d.%m})")
-    for idx in range(5):
+    for idx, week in enumerate(prev_week_ranges):
+        label_idx = len(prev_week_ranges) - idx
+        start = dt.date.fromisoformat(week["start"])
+        end = dt.date.fromisoformat(week["end"])
+        week_labels.append(f"??? -{label_idx} ({start:%d.%m}?{end:%d.%m})")
+    for idx, week in enumerate(curr_week_ranges):
         label_idx = idx + 1
-        if idx >= len(curr_week_ranges):
-            week_labels.append(f"Нед {label_idx} ()")
-        else:
-            week = curr_week_ranges[idx]
-            start = dt.date.fromisoformat(week["start"])
-            end = dt.date.fromisoformat(week["end"])
-            week_labels.append(f"Нед {label_idx} ({start:%d.%m}–{end:%d.%m})")
+        start = dt.date.fromisoformat(week["start"])
+        end = dt.date.fromisoformat(week["end"])
+        week_labels.append(f"??? {label_idx} ({start:%d.%m}?{end:%d.%m})")
 
     start_iso = prev_days[0].isoformat()
     end_iso = curr_days[-1].isoformat()
@@ -409,16 +397,12 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         ]
 
         week_totals: List[Optional[float]] = []
-        if prev_pad:
-            week_totals.extend([None] * prev_pad)
         for chunk in prev_chunks:
             slice_values = prev_values[chunk["start_idx"] : chunk["end_idx"] + 1]
             week_totals.append(_sum(slice_values))
         for chunk in curr_chunks:
             slice_values = curr_values[chunk["start_idx"] : chunk["end_idx"] + 1]
             week_totals.append(_sum(slice_values))
-        if curr_pad:
-            week_totals.extend([None] * curr_pad)
 
         month_total = _sum(curr_values)
 
