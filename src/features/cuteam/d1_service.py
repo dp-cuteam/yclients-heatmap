@@ -43,6 +43,7 @@ BRANCH_ALIAS_TO_CANON = {
     "CM": "\u0421\u041c",
     "MP": "\u041c\u041f",
 }
+_ALIASES_NORMALIZED = False
 YEAR_METRIC_CODES = [
     "revenue_total",
     "revenue_open_space",
@@ -157,6 +158,40 @@ def _branch_name_map() -> Dict[str, str]:
     return mapping
 
 
+def _normalize_branch_aliases() -> None:
+    global _ALIASES_NORMALIZED
+    if _ALIASES_NORMALIZED:
+        return
+    try:
+        init_schema()
+        with get_conn() as conn:
+            for alias, canonical in BRANCH_ALIAS_TO_CANON.items():
+                if alias == canonical:
+                    continue
+                row = conn.execute(
+                    "SELECT 1 FROM manual_sheet_daily WHERE branch_code = ? LIMIT 1",
+                    (alias,),
+                ).fetchone()
+                if not row:
+                    continue
+                conn.execute(
+                    "INSERT INTO manual_sheet_daily (branch_code, metric_code, date, value, source, updated_at) "
+                    "SELECT ?, metric_code, date, value, source, updated_at "
+                    "FROM manual_sheet_daily WHERE branch_code = ? "
+                    "ON CONFLICT(branch_code, metric_code, date) DO UPDATE SET "
+                    "value=excluded.value, source=excluded.source, updated_at=excluded.updated_at",
+                    (canonical, alias),
+                )
+                conn.execute(
+                    "DELETE FROM manual_sheet_daily WHERE branch_code = ?",
+                    (alias,),
+                )
+            conn.commit()
+    except Exception:
+        pass
+    _ALIASES_NORMALIZED = True
+
+
 def _branch_codes_from_data() -> List[str]:
     try:
         with get_conn() as conn:
@@ -202,6 +237,7 @@ def _is_avg_metric(code: str) -> bool:
 
 def list_branches() -> List[Dict[str, Any]]:
     init_schema()
+    _normalize_branch_aliases()
     try:
         with get_conn() as conn:
             rows = conn.execute("SELECT code, name FROM branches ORDER BY name").fetchall()
@@ -235,6 +271,7 @@ def list_branches() -> List[Dict[str, Any]]:
 
 def list_months(branch_code: str) -> List[str]:
     init_schema()
+    _normalize_branch_aliases()
     branch_code = _normalize_branch_code(branch_code) or branch_code
     with get_conn() as conn:
         rows = conn.execute(
@@ -380,6 +417,7 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
 
 def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
+    _normalize_branch_aliases()
     branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     base_month_start = _parse_month(month)
     prev_month_start = _prev_month_start(base_month_start)
@@ -389,11 +427,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
         return {"branch": None, "month": month, "days": [], "weeks": [], "metrics": []}
 
     prev_chunks = _week_chunks(prev_days)
-    if len(prev_chunks) > 5:
-        prev_chunks = prev_chunks[-5:]
     curr_chunks = _week_chunks(curr_days)
-    if len(curr_chunks) > 5:
-        curr_chunks = curr_chunks[-5:]
 
     prev_week_ranges = [
         {
@@ -506,6 +540,7 @@ def build_d1_payload(branch_code: str, month: str) -> Dict[str, Any]:
 
 def build_raw_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
+    _normalize_branch_aliases()
     branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     month_start = _parse_month(month)
     days = _month_days(month_start)
@@ -606,6 +641,7 @@ def _year_range_from_months(months: List[str]) -> List[int]:
 
 def build_year_summary_payload(branch_code: str) -> Dict[str, Any]:
     init_schema()
+    _normalize_branch_aliases()
     branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     facts = _fetch_year_facts(branch_code)
     plans = _fetch_year_plans(branch_code)

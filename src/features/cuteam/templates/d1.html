@@ -136,17 +136,18 @@
         position: sticky;
         left: 0;
         background: var(--card);
-        z-index: 6;
+        z-index: 12;
         box-shadow: 2px 0 0 var(--border-soft);
+        background-clip: padding-box;
       }
 
       .sticky-col.unit-col {
         left: 230px;
-        z-index: 6;
+        z-index: 12;
       }
 
       .d1-table thead th.sticky-col {
-        z-index: 9;
+        z-index: 20;
       }
 
       .d1-table th.sticky-col,
@@ -186,16 +187,32 @@
         position: sticky;
         top: 0;
         background: var(--card);
-        z-index: 6;
+        z-index: 15;
       }
 
       .year-table thead th.metric-col {
-        z-index: 8;
+        z-index: 22;
       }
 
       .year-table td.plan-col input {
         width: 100%;
         min-width: 70px;
+        border: none;
+        border-bottom: 1px dashed var(--border-soft);
+        border-radius: 0;
+        background: transparent;
+        padding: 2px 0;
+        font: inherit;
+        text-align: right;
+        color: inherit;
+        appearance: textfield;
+        box-shadow: none;
+      }
+
+      .year-table td.plan-col input:focus {
+        outline: none;
+        border-color: var(--accent);
+        background: rgba(247, 201, 118, 0.12);
       }
 
       .year-table td {
@@ -206,6 +223,10 @@
         font-weight: 600;
       }
 
+      .year-table tr.metric-row td {
+        font-weight: 600;
+      }
+
       .year-table tr.plan-row th.metric-col {
         font-weight: 500;
         color: var(--muted);
@@ -213,6 +234,7 @@
 
       .year-table tr.plan-row td {
         color: var(--muted);
+        background: rgba(233, 189, 166, 0.05);
       }
 
       .year-table tr.plan-row td,
@@ -222,7 +244,7 @@
 
       .year-table tr.pair-odd td,
       .year-table tr.pair-odd th {
-        background: rgba(233, 189, 166, 0.08);
+        background: rgba(233, 189, 166, 0.06);
       }
 
       .year-table td.plan-col {
@@ -418,6 +440,82 @@
         }
       }
 
+      .overview-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .overview-meta-item {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        padding: 8px 12px;
+        min-width: 180px;
+      }
+
+      .overview-meta-label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .overview-meta-value {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .overview-panels {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      @media (min-width: 960px) {
+        .overview-panels {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      .overview-panel {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        padding: 12px;
+      }
+
+      .overview-panel h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .overview-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .overview-list li {
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .overview-list .list-label {
+        color: var(--ink);
+      }
+
+      .overview-list .list-value {
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       .kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -443,6 +541,11 @@
       .kpi-value {
         font-size: 18px;
         font-weight: 600;
+      }
+
+      .kpi-value.no-data {
+        color: var(--muted);
+        font-weight: 500;
       }
 
       .kpi-sub {
@@ -578,13 +681,7 @@
           <label>Месяц сравнения</label>
           <select id="compareMonthSelect"></select>
         </div>
-        <div class="field">
-          <label>Сравнение</label>
-          <div class="toggle-group">
-            <label><input type="radio" name="scale" value="weeks" checked /> Недели</label>
-            <label><input type="radio" name="scale" value="months" /> Месяц</label>
-          </div>
-        </div>
+        
       </section>
 
       <section class="cuteam-card">
@@ -609,7 +706,7 @@
           <div>
             <div class="eyebrow">Свод</div>
             <h2 class="card-title">Агрегированные показатели в динамике</h2>
-            <div class="card-subtitle">Недели предыдущего месяца и выбранного месяца (если 6 недель — последние 5)</div>
+            <div class="card-subtitle">Недели предыдущего месяца и выбранного месяца</div>
           </div>
           <div class="card-actions">
             <button class="ghost" id="summaryCopyBtn" type="button">Скопировать TSV</button>
@@ -663,61 +760,73 @@
           <div>
             <div class="eyebrow">NEW Overview</div>
             <h2 class="card-title">Главный управленческий дашборд</h2>
-            <div class="card-subtitle">KPI и быстрые ответы на ключевые вопросы</div>
+            <div class="card-subtitle">Краткий срез по месяцу</div>
+          </div>
+        </div>
+        <div class="overview-meta">
+          <div class="overview-meta-item">
+            <div class="overview-meta-label">Месяц</div>
+            <div class="overview-meta-value" id="overviewMonthLabel">—</div>
+          </div>
+          <div class="overview-meta-item">
+            <div class="overview-meta-label">Прогресс месяца</div>
+            <div class="overview-meta-value" id="overviewProgress">—</div>
           </div>
         </div>
         <div class="kpi-grid" id="overviewKpis"></div>
-        <div class="overview-notes" id="overviewNotes"></div>
-      </section>
-
-      <section class="cuteam-card" id="revenueSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 2</div>
-            <h2 class="card-title">Доходы в целом</h2>
-            <div class="card-subtitle">Динамика выручки и сравнение периодов</div>
+        <div class="overview-panels">
+          <div class="overview-panel">
+            <h3>Рост к прошлому году (ТОП-3 драйвера)</h3>
+            <ul class="overview-list" id="overviewDrivers"></ul>
           </div>
-        </div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="revenueDailyChart"></div>
-          <div class="chart-card" id="revenueWeeklyChart"></div>
-          <div class="chart-card" id="revenueMonthlyChart"></div>
-        </div>
-        <div class="table-wrap" id="revenueCompareTable"></div>
-        <div class="table-wrap" id="revenuePeriodsTable"></div>
-      </section>
-
-      <section class="cuteam-card" id="coworkingSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 3</div>
-            <h2 class="card-title">Коворкинг: доходы по направлениям</h2>
-            <div class="card-subtitle">Динамика по неделям и ratio Лаборатория/Аренда</div>
+          <div class="overview-panel">
+            <h3>Риски и проверки (ТОП-3)</h3>
+            <ul class="overview-list" id="overviewRisks"></ul>
           </div>
-        </div>
-        <div class="kpi-grid" id="coworkingCards"></div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="coworkingLineChart"></div>
-          <div class="chart-card" id="coworkingRatioChart"></div>
         </div>
       </section>
 
-      <section class="cuteam-card" id="coffeeMainSection">
+      <section class="cuteam-card" id="coeffSection">
         <div class="card-head">
           <div>
-            <div class="eyebrow">Дашборд 4</div>
-            <h2 class="card-title">Кофейня: основные показатели</h2>
-            <div class="card-subtitle">Выручка, чеки, средний чек</div>
+            <div class="eyebrow">3 коэффициента</div>
+            <h2 class="card-title">Ключевые коэффициенты</h2>
+            <div class="card-subtitle">Средний чек, порча, лаборатория к аренде</div>
           </div>
         </div>
-        <div class="kpi-grid" id="coffeeMainCards"></div>
-        <div class="chart-card" id="coffeeMainChart"></div>
+        <div class="kpi-grid" id="coeffKpis"></div>
+      </section>
+
+      <section class="cuteam-card" id="checksSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">3 проверки</div>
+            <h2 class="card-title">Триггеры</h2>
+            <div class="card-subtitle">Касса и загрузка</div>
+          </div>
+        </div>
+        <div class="overview-panel">
+          <ul class="overview-list" id="checksList"></ul>
+        </div>
+      </section>
+
+      <section class="cuteam-card" id="coffeeTriggerSection">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Кофейня</div>
+            <h2 class="card-title">Высокая загрузка, слабая кофейня</h2>
+            <div class="card-subtitle">Проверка по последним 8 неделям</div>
+          </div>
+        </div>
+        <div class="overview-panel">
+          <ul class="overview-list" id="coffeeTrigger"></ul>
+        </div>
       </section>
 
       <section class="cuteam-card" id="coffeeStructureSection">
         <div class="card-head">
           <div>
-            <div class="eyebrow">Дашборд 5</div>
+            <div class="eyebrow">Кофейня</div>
             <h2 class="card-title">Кофейня: структура продаж</h2>
             <div class="card-subtitle">Еда и напитки по неделям</div>
           </div>
@@ -728,89 +837,6 @@
         </div>
       </section>
 
-      <section class="cuteam-card" id="loadSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 6</div>
-            <h2 class="card-title">Загрузка и эффективность</h2>
-            <div class="card-subtitle">Загрузка vs выручка</div>
-          </div>
-        </div>
-        <div class="kpi-grid" id="loadCards"></div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="loadLineChart"></div>
-          <div class="chart-card" id="loadScatterOpen"></div>
-          <div class="chart-card" id="loadScatterCoffee"></div>
-        </div>
-      </section>
-
-      <section class="cuteam-card" id="writeoffSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 7</div>
-            <h2 class="card-title">Списания и порча</h2>
-            <div class="card-subtitle">Порча и writeoff rate</div>
-          </div>
-        </div>
-        <div class="chart-card" id="writeoffChart"></div>
-        <div class="table-wrap" id="writeoffStats"></div>
-      </section>
-
-      <section class="cuteam-card" id="cashSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 8</div>
-            <h2 class="card-title">Деньги и касса</h2>
-            <div class="card-subtitle">Наличные/безналичные, кассовые расхождения</div>
-          </div>
-        </div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="cashLineChart"></div>
-          <div class="chart-card" id="cashBarsChart"></div>
-        </div>
-        <div class="table-wrap" id="cashControlTable"></div>
-      </section>
-
-      <section class="cuteam-card" id="expenseSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 9</div>
-            <h2 class="card-title">Расходы</h2>
-            <div class="card-subtitle">Структура и доля от выручки</div>
-          </div>
-        </div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="expenseLineChart"></div>
-          <div class="chart-card" id="expenseStackChart"></div>
-          <div class="chart-card" id="expenseRatioChart"></div>
-        </div>
-      </section>
-
-      <section class="cuteam-card" id="profitSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 10</div>
-            <h2 class="card-title">Прибыль и рентабельность</h2>
-            <div class="card-subtitle">Operating profit и маржа</div>
-          </div>
-        </div>
-        <div class="dashboard-grid">
-          <div class="chart-card" id="profitChart"></div>
-          <div class="chart-card" id="marginChart"></div>
-        </div>
-      </section>
-
-      <section class="cuteam-card" id="signalsSection">
-        <div class="card-head">
-          <div>
-            <div class="eyebrow">Дашборд 11</div>
-            <h2 class="card-title">Сигналы и контроль</h2>
-            <div class="card-subtitle">Автоматические сигналы по KPI</div>
-          </div>
-        </div>
-        <div class="table-wrap" id="signalsTable"></div>
-      </section>
-
     </div>
 
     <script>
@@ -819,7 +845,6 @@
         month: null,
         summaryMonth: null,
         compareMonth: null,
-        scale: "weeks",
         data: null,
         rawData: null,
         compareData: null,
@@ -845,34 +870,15 @@
       const planStatus = document.getElementById("planStatus");
       const branchField = document.getElementById("branchField");
       const overviewKpis = document.getElementById("overviewKpis");
-      const overviewNotes = document.getElementById("overviewNotes");
-      const revenueDailyChart = document.getElementById("revenueDailyChart");
-      const revenueWeeklyChart = document.getElementById("revenueWeeklyChart");
-      const revenueMonthlyChart = document.getElementById("revenueMonthlyChart");
-      const revenueCompareTable = document.getElementById("revenueCompareTable");
-      const revenuePeriodsTable = document.getElementById("revenuePeriodsTable");
-      const coworkingCards = document.getElementById("coworkingCards");
-      const coworkingLineChart = document.getElementById("coworkingLineChart");
-      const coworkingRatioChart = document.getElementById("coworkingRatioChart");
-      const coffeeMainCards = document.getElementById("coffeeMainCards");
-      const coffeeMainChart = document.getElementById("coffeeMainChart");
+      const overviewMonthLabel = document.getElementById("overviewMonthLabel");
+      const overviewProgress = document.getElementById("overviewProgress");
+      const overviewDrivers = document.getElementById("overviewDrivers");
+      const overviewRisks = document.getElementById("overviewRisks");
+      const coeffKpis = document.getElementById("coeffKpis");
+      const checksList = document.getElementById("checksList");
+      const coffeeTrigger = document.getElementById("coffeeTrigger");
       const coffeeFoodStack = document.getElementById("coffeeFoodStack");
       const coffeeDrinkStack = document.getElementById("coffeeDrinkStack");
-      const loadCards = document.getElementById("loadCards");
-      const loadLineChart = document.getElementById("loadLineChart");
-      const loadScatterOpen = document.getElementById("loadScatterOpen");
-      const loadScatterCoffee = document.getElementById("loadScatterCoffee");
-      const writeoffChart = document.getElementById("writeoffChart");
-      const writeoffStats = document.getElementById("writeoffStats");
-      const cashLineChart = document.getElementById("cashLineChart");
-      const cashBarsChart = document.getElementById("cashBarsChart");
-      const cashControlTable = document.getElementById("cashControlTable");
-      const expenseLineChart = document.getElementById("expenseLineChart");
-      const expenseStackChart = document.getElementById("expenseStackChart");
-      const expenseRatioChart = document.getElementById("expenseRatioChart");
-      const profitChart = document.getElementById("profitChart");
-      const marginChart = document.getElementById("marginChart");
-      const signalsTable = document.getElementById("signalsTable");
 
 
       function formatNumber(value, decimals = 0) {
@@ -944,6 +950,141 @@
         const [year, month] = isoMonth.split("-");
         const date = new Date(Number(year), Number(month) - 1, 1);
         return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(date);
+      }
+
+      function formatMonthLong(isoMonth) {
+        const [year, month] = isoMonth.split("-");
+        const months = [
+          "Январь",
+          "Февраль",
+          "Март",
+          "Апрель",
+          "Май",
+          "Июнь",
+          "Июль",
+          "Август",
+          "Сентябрь",
+          "Октябрь",
+          "Ноябрь",
+          "Декабрь",
+        ];
+        const idx = Math.max(0, Math.min(11, Number(month) - 1));
+        return `${months[idx]} ${year}`;
+      }
+
+      function formatValueOrNA(value, unit, options = {}) {
+        const isMissing =
+          value === null || value === undefined || (options.noZero && value === 0);
+        return {
+          text: isMissing ? "нет данных" : formatAuto(value, unit),
+          missing: isMissing,
+        };
+      }
+
+      function buildYoYLine(current, prev, rangeLabel, options = {}) {
+        const label = rangeLabel ? `Δ к году (MTD ${rangeLabel})` : "Δ к году (MTD)";
+        if (
+          current === null ||
+          current === undefined ||
+          prev === null ||
+          prev === undefined ||
+          prev === 0
+        ) {
+          if (options.hideIfMissing) return null;
+          return `${label}: нет данных`;
+        }
+        const pct = ((current - prev) / prev) * 100;
+        return `${label}: ${formatSignedPercent(pct)}`;
+      }
+
+      function renderList(container, items, emptyText, formatter) {
+        if (!container) return;
+        container.innerHTML = "";
+        if (!items || items.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = emptyText;
+          container.appendChild(li);
+          return;
+        }
+        items.forEach((item) => {
+          const row = formatter(item);
+          const li = document.createElement("li");
+          if (row.label) {
+            const label = document.createElement("span");
+            label.className = "list-label";
+            label.textContent = row.label;
+            li.appendChild(label);
+          }
+          const value = document.createElement("span");
+          value.className = "list-value";
+          value.textContent = row.value || "";
+          if (row.valueClass) value.classList.add(row.valueClass);
+          li.appendChild(value);
+          container.appendChild(li);
+        });
+      }
+
+      function renderChecks(container, items, emptyText) {
+        if (!container) return;
+        container.innerHTML = "";
+        if (!items || items.length === 0) {
+          const li = document.createElement("li");
+          li.textContent = emptyText;
+          container.appendChild(li);
+          return;
+        }
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          const label = document.createElement("span");
+          label.className = "list-label";
+          label.textContent = item.title || "Проверка";
+          li.appendChild(label);
+
+          const value = document.createElement("span");
+          value.className = "list-value";
+
+          const pill = document.createElement("span");
+          pill.className = "status-pill";
+          if (item.status === "alert") {
+            pill.classList.add("status-alert");
+            pill.textContent = "ALERT";
+          } else if (item.status === "ok") {
+            pill.classList.add("status-ok");
+            pill.textContent = "OK";
+          } else {
+            pill.textContent = "нет данных";
+          }
+          value.appendChild(pill);
+
+          const detailText = formatCheckDetail(item);
+          if (detailText) {
+            const detail = document.createElement("span");
+            detail.className = "kpi-sub";
+            detail.textContent = detailText;
+            value.appendChild(detail);
+          }
+
+          li.appendChild(value);
+          container.appendChild(li);
+        });
+      }
+
+      function formatCheckDetail(item) {
+        if (!item) return "";
+        if (item.key === "cash") {
+          if (item.status === "alert") {
+            const diff = formatAuto(item.max_diff, "rub");
+            return item.count ? `${item.count} дн., до ${diff}` : `до ${diff}`;
+          }
+          if (item.status === "ok") return "без расхождений";
+        }
+        if (item.key === "load_open" || item.key === "load_coffee") {
+          if (item.status === "alert") {
+            return `${formatAuto(item.value, "rub")} vs ${formatAuto(item.avg, "rub")}`;
+          }
+          if (item.status === "ok") return "норма";
+        }
+        return "";
       }
 
       function setCopyStatus(message, isError = false) {
@@ -1192,7 +1333,6 @@
       ];
 
       const FOOD_CODES = [
-        "sold_food_total",
         "revenue_desserts",
         "revenue_food_breakfast",
         "revenue_food_lunch",
@@ -1202,7 +1342,6 @@
       ];
 
       const DRINK_CODES = [
-        "revenue_drinks_total",
         "revenue_coffee",
         "revenue_coffee_hot",
         "revenue_drinks_cold",
@@ -1324,7 +1463,7 @@
         return line;
       }
 
-      function createKpiTile({ title, value, unit, lines }) {
+      function createKpiTile({ title, value, unit, lines, valueText, valueClass }) {
         const tile = document.createElement("div");
         tile.className = "kpi-tile";
         const titleEl = document.createElement("div");
@@ -1332,9 +1471,16 @@
         titleEl.textContent = title;
         const valueEl = document.createElement("div");
         valueEl.className = "kpi-value";
-        const safeValue = valueOrZero(value);
-        valueEl.textContent = formatCompact(safeValue, unit);
-        applyZeroClass(valueEl, safeValue);
+        if (valueText !== undefined && valueText !== null) {
+          valueEl.textContent = valueText;
+        } else {
+          const safeValue = valueOrZero(value);
+          valueEl.textContent = formatCompact(safeValue, unit);
+          applyZeroClass(valueEl, safeValue);
+        }
+        if (valueClass) {
+          valueEl.classList.add(valueClass);
+        }
         tile.appendChild(titleEl);
         tile.appendChild(valueEl);
         (lines || []).forEach((line) => {
@@ -1617,481 +1763,197 @@
       }
 
       function renderOverview(data) {
-        if (!data) {
+        if (!data || !data.mtd) {
           renderEmpty(overviewKpis, "Нет данных");
+          if (overviewMonthLabel) overviewMonthLabel.textContent = "—";
+          if (overviewProgress) overviewProgress.textContent = "нет данных";
+          renderList(
+            overviewDrivers,
+            [],
+            "Рост не выявлен / недостаточно данных",
+            () => ({ label: "", value: "" })
+          );
+          renderList(
+            overviewRisks,
+            [],
+            "Риски: нет критичных отклонений.",
+            () => ({ label: "", value: "" })
+          );
+          renderEmpty(coeffKpis, "Нет данных");
+          renderChecks(checksList, [], "Нет данных");
+          renderChecks(coffeeTrigger, [], "Нет данных");
+          if (coffeeFoodStack) renderEmpty(coffeeFoodStack, "Нет данных");
+          if (coffeeDrinkStack) renderEmpty(coffeeDrinkStack, "Нет данных");
           return;
         }
-        const period = data.period_values || {};
-        const monthValues = period.month || {};
-        const prevMonthValues = period.prev_month || {};
-        const yoyMonthValues = period.yoy_month || {};
-        const weekValues = period.week || {};
-        const prevWeekValues = period.prev_week || {};
-        const yoyWeekValues = period.yoy_week || {};
+
+        const mtd = data.mtd || {};
+        const current = mtd.current || {};
+        const yoy = mtd.yoy || {};
+        const rangeLabel = mtd.range_label || "";
+        const cutoffDay = mtd.cutoff_day || 0;
+        const daysInMonth = mtd.days_in_month || 0;
+
+        if (overviewMonthLabel) {
+          overviewMonthLabel.textContent = data.month ? formatMonthLong(data.month) : "—";
+        }
+        if (overviewProgress) {
+          overviewProgress.textContent = cutoffDay
+            ? `Прошло ${cutoffDay} из ${daysInMonth} дней`
+            : "нет данных";
+        }
+
+        const buildValue = (value, unit, options = {}) => {
+          const info = formatValueOrNA(value, unit, options);
+          let valueClass = "";
+          if (info.missing) valueClass = "no-data";
+          else if (value === 0) valueClass = "zero-value";
+          return { text: info.text, className: valueClass };
+        };
+
+        const revenueValue = buildValue(current.revenue_total, "rub");
+        const coworkValue = buildValue(current.coworking_total, "rub");
+        const coffeeValue = buildValue(current.coffee_revenue_total, "rub");
+        const loadValue = buildValue(current.load_percent, "pct", { noZero: true });
+        const writeoffValue = buildValue(current.written_off_food_total, "rub");
+        const writeoffRate = formatValueOrNA(current.writeoff_rate_full, "pct_ratio");
+        const coffeeChecks = formatValueOrNA(current.coffee_checks, "qty");
+        const avgCheck = formatValueOrNA(current.avg_check, "rub");
 
         const tiles = [
           createKpiTile({
             title: "Выручка всего",
-            value: monthValues.revenue_total,
-            unit: getMetricUnit("revenue_total"),
-            lines: [
-              buildDeltaLine("Δ неделя", computeDelta(weekValues.revenue_total, prevWeekValues.revenue_total)),
-              buildDeltaLine("Δ год", computeDelta(monthValues.revenue_total, yoyMonthValues.revenue_total)),
-            ],
+            valueText: revenueValue.text,
+            valueClass: revenueValue.className,
+            lines: [buildYoYLine(current.revenue_total, yoy.revenue_total, rangeLabel)],
           }),
           createKpiTile({
-            title: "Коворкинг всего",
-            value: monthValues.coworking_total,
-            unit: getMetricUnit("coworking_total"),
-            lines: [
-              `Доля: ${formatAuto(
-                monthValues.coworking_total && monthValues.revenue_total
-                  ? monthValues.coworking_total / monthValues.revenue_total
-                  : null,
-                "pct_ratio"
-              )}`,
-            ],
+            title: "Коворкинг",
+            valueText: coworkValue.text,
+            valueClass: coworkValue.className,
+            lines: [buildYoYLine(current.coworking_total, yoy.coworking_total, rangeLabel)],
           }),
           createKpiTile({
-            title: "Кофейня всего",
-            value: monthValues.coffee_revenue_total,
-            unit: getMetricUnit("coffee_revenue_total"),
+            title: "Кофейня",
+            valueText: coffeeValue.text,
+            valueClass: coffeeValue.className,
             lines: [
-              `Чеки: ${formatAuto(monthValues.coffee_checks, getMetricUnit("coffee_checks"))}`,
-              `Средний чек: ${formatAuto(monthValues.avg_check, getMetricUnit("avg_check"))}`,
+              `Чеки: ${coffeeChecks.text}`,
+              `Средний чек: ${avgCheck.text}`,
+              buildYoYLine(current.coffee_revenue_total, yoy.coffee_revenue_total, rangeLabel),
             ],
           }),
           createKpiTile({
             title: "Загрузка",
-            value: monthValues.load_percent,
-            unit: getMetricUnit("load_percent"),
-            lines: ["Среднее за месяц"],
+            valueText: loadValue.text,
+            valueClass: loadValue.className,
+            lines: [buildYoYLine(current.load_percent, yoy.load_percent, rangeLabel, { hideIfMissing: true })],
           }),
           createKpiTile({
             title: "Порча",
-            value: monthValues.written_off_food_total,
-            unit: getMetricUnit("written_off_food_total"),
+            valueText: writeoffValue.text,
+            valueClass: writeoffValue.className,
             lines: [
-              `Доля: ${formatAuto(monthValues.writeoff_rate, getMetricUnit("writeoff_rate"))}`,
+              `Доля: ${writeoffRate.text}`,
+              buildYoYLine(
+                current.written_off_food_total,
+                yoy.written_off_food_total,
+                rangeLabel
+              ),
             ],
           }),
         ];
         renderKpiGrid(overviewKpis, tiles);
 
-        overviewNotes.innerHTML = "";
-        const notesGrid = document.createElement("div");
-        notesGrid.className = "overview-grid";
-        const notes = [
-          {
-            title: "Сколько заработали",
-            text: `Выручка за месяц: ${formatAuto(monthValues.revenue_total, "rub")}`,
-          },
-          {
-            title: "Где заработали",
-            text: `Коворкинг: ${formatAuto(monthValues.coworking_total, "rub")}, кофейня: ${formatAuto(
-              monthValues.coffee_revenue_total,
-              "rub"
-            )}`,
-          },
-          {
-            title: "Где рост",
-            text: `Δ месяц: ${formatSigned(
-              computeDelta(monthValues.revenue_total, prevMonthValues.revenue_total).delta
-            )}`,
-          },
-          {
-            title: "Где риск",
-            text: data.cash_control && data.cash_control.length
-              ? `Расхождения в кассе: ${data.cash_control.length}`
-              : "Касса без расхождений",
-          },
-          {
-            title: "Где проблема",
-            text: `Порча: ${formatAuto(monthValues.writeoff_rate, "pct_ratio")}`,
-          },
-        ];
-        notes.forEach((note) => {
-          const item = document.createElement("div");
-          item.className = "overview-item";
-          const h3 = document.createElement("h3");
-          h3.textContent = note.title;
-          const p = document.createElement("p");
-          p.textContent = note.text;
-          item.appendChild(h3);
-          item.appendChild(p);
-          notesGrid.appendChild(item);
+        renderList(overviewDrivers, data.drivers, "Рост не выявлен / недостаточно данных", (item) => ({
+          label: item.label,
+          value: `${formatSigned(item.delta)} (${formatSignedPercent(item.pct)})`,
+          valueClass: item.delta > 0 ? "delta-positive" : "delta-negative",
+        }));
+
+        renderList(overviewRisks, data.alerts, "Риски: нет критичных отклонений.", (alert) => {
+          if (!alert) return { label: "", value: "" };
+          if (alert.type === "cash") {
+            return {
+              label: "Касса: расхождение",
+              value: `до ${formatAuto(alert.max_diff, "rub")}`,
+              valueClass: "delta-negative",
+            };
+          }
+          if (alert.type === "writeoff") {
+            return {
+              label: "Порча выше нормы",
+              value: formatAuto(alert.rate, "pct_ratio"),
+              valueClass: "delta-negative",
+            };
+          }
+          if (alert.type === "load_open") {
+            return {
+              label: "Загрузка высокая, аренда низкая",
+              value: `${formatAuto(alert.value, "rub")} vs ${formatAuto(alert.avg, "rub")}`,
+              valueClass: "delta-negative",
+            };
+          }
+          if (alert.type === "load_coffee") {
+            return {
+              label: "Загрузка высокая, кофейня слабая",
+              value: `${formatAuto(alert.value, "rub")} vs ${formatAuto(alert.avg, "rub")}`,
+              valueClass: "delta-negative",
+            };
+          }
+          return { label: "", value: "" };
         });
-        overviewNotes.appendChild(notesGrid);
 
-        const daily = data.daily || {};
+        const coeffs = data.coefficients || {};
+        const coeffTiles = [
+          createKpiTile({
+            title: "Средний чек",
+            valueText: buildValue(coeffs.avg_check, "rub").text,
+            valueClass: buildValue(coeffs.avg_check, "rub").className,
+          }),
+          createKpiTile({
+            title: "Порча (доля)",
+            valueText: buildValue(coeffs.writeoff_rate, "pct_ratio").text,
+            valueClass: buildValue(coeffs.writeoff_rate, "pct_ratio").className,
+          }),
+          createKpiTile({
+            title: "Лаборатория / аренда",
+            valueText: buildValue(coeffs.lab_to_open_space_ratio, "ratio").text,
+            valueClass: buildValue(coeffs.lab_to_open_space_ratio, "ratio").className,
+          }),
+        ];
+        renderKpiGrid(coeffKpis, coeffTiles);
+
+        renderChecks(checksList, data.checks || [], "Нет данных");
+        const coffeeCheck = (data.checks || []).filter((item) => item.key === "load_coffee");
+        renderChecks(coffeeTrigger, coffeeCheck, "Нет данных");
+
         const weekly = data.weekly || {};
-        const monthly = data.monthly || {};
-        const weeklyValues = weekly.values || {};
-        const dailyValues = daily.values || {};
-        const monthlyValues = monthly.values || {};
         const weeks = weekly.weeks || [];
-
-        renderChartCard(
-          revenueDailyChart,
-          "Выручка по дням",
-          createSparkline(dailyValues.revenue_total || [], "#d99a83")
-        );
-        renderChartCard(
-          revenueWeeklyChart,
-          "Выручка по неделям",
-          createSparkline(weeklyValues.revenue_total || [], "#3a3a3a")
-        );
-        renderChartCard(
-          revenueMonthlyChart,
-          "Выручка по месяцам",
-          createSparkline(monthlyValues.revenue_total || [], "#a9836f")
-        );
-
-        if (revenueCompareTable) {
-          const compareRows = (data.revenue_compare || []).map((row) => {
-            const unit = getMetricUnit(row.code);
-            const deltaSafe = valueOrZero(row.delta_pct);
-            const deltaClassName = deltaClass(deltaSafe);
-            return [
-              { text: getMetricLabel(row.code) },
-              buildValueCell(row.current, (value) => formatAuto(value, unit)),
-              buildValueCell(row.previous, (value) => formatAuto(value, unit)),
-              buildValueCell(row.yoy, (value) => formatAuto(value, unit)),
-              {
-                text: formatSignedPercent(deltaSafe),
-                className: deltaClassName,
-              },
-            ];
-          });
-          const header = [
-            "Показатель",
-            `Текущий (${formatMonthLabel(data.month)})`,
-            "Прошлый месяц",
-            "YoY",
-            "Δ%",
-          ];
-          revenueCompareTable.innerHTML = "";
-          revenueCompareTable.appendChild(buildMiniTable(header, compareRows));
-        }
-
-        if (revenuePeriodsTable) {
-          const periodRows = (data.period_compare || []).map((row) => {
-            return [
-              { text: row.label },
-              buildValueCell(row.current, (value) => formatAuto(value, "rub")),
-              buildValueCell(row.previous, (value) => formatAuto(value, "rub")),
-              buildValueCell(row.yoy, (value) => formatAuto(value, "rub")),
-              buildValueCell(row.best, (value) => formatAuto(value, "rub")),
-            ];
-          });
-          const header = ["Период", "Текущий", "Прошлый", "YoY", "Лучший"];
-          revenuePeriodsTable.innerHTML = "";
-          revenuePeriodsTable.appendChild(buildMiniTable(header, periodRows));
-        }
-
-        if (coworkingCards) {
-          const cards = COWORKING_CODES.map((code) =>
-            createKpiTile({
-              title: getMetricLabel(code),
-              value: weekValues[code],
-              unit: getMetricUnit(code),
-              lines: [
-                buildDeltaLine("Δ WoW", computeDelta(weekValues[code], prevWeekValues[code])),
-                buildDeltaLine("Δ YoY", computeDelta(weekValues[code], yoyWeekValues[code])),
-              ],
-            })
-          );
-          coworkingCards.innerHTML = "";
-          cards.forEach((card) => coworkingCards.appendChild(card));
-        }
-
-        if (coworkingLineChart) {
-          const series = COWORKING_CODES.map((code, idx) => ({
-            label: getMetricLabel(code),
-            values: weeklyValues[code] || [],
-            color: PALETTE[idx % PALETTE.length],
-          }));
-          renderChartCard(coworkingLineChart, "Направления по неделям", createMultiLine(series));
-        }
-
-        if (coworkingRatioChart) {
-          renderChartCard(
-            coworkingRatioChart,
-            "Лаборатория / Аренда",
-            createSparkline(weeklyValues.lab_to_open_space_ratio || [], "#8b1e1e")
-          );
-        }
-
-        if (coffeeMainCards) {
-          const coffeeCards = [
-            { code: "coffee_revenue_total", label: "Выручка" },
-            { code: "coffee_checks", label: "Чеки" },
-            { code: "avg_check", label: "Средний чек" },
-          ].map((item) =>
-            createKpiTile({
-              title: item.label,
-              value: weekValues[item.code],
-              unit: getMetricUnit(item.code),
-              lines: [
-                buildDeltaLine("Δ WoW", computeDelta(weekValues[item.code], prevWeekValues[item.code])),
-                buildDeltaLine("Δ YoY", computeDelta(weekValues[item.code], yoyWeekValues[item.code])),
-              ],
-            })
-          );
-          coffeeMainCards.innerHTML = "";
-          coffeeCards.forEach((card) => coffeeMainCards.appendChild(card));
-        }
-
-        if (coffeeMainChart) {
-          const series = [
-            {
-              label: "Выручка",
-              values: weeklyValues.coffee_revenue_total || [],
-              color: "#d99a83",
-            },
-            {
-              label: "Чеки",
-              values: weeklyValues.coffee_checks || [],
-              color: "#3a3a3a",
-            },
-            {
-              label: "Средний чек",
-              values: weeklyValues.avg_check || [],
-              color: "#a9836f",
-            },
-          ];
-          renderChartCard(coffeeMainChart, "Динамика кофе", createMultiLine(series));
-        }
-
+        const weeklyValues = weekly.values || {};
         if (coffeeFoodStack) {
           coffeeFoodStack.innerHTML = "";
           coffeeFoodStack.appendChild(
             createStackedRows(weeks, weeklyValues, FOOD_CODES, "Еда: структура по неделям")
           );
         }
-
         if (coffeeDrinkStack) {
           coffeeDrinkStack.innerHTML = "";
           coffeeDrinkStack.appendChild(
             createStackedRows(weeks, weeklyValues, DRINK_CODES, "Напитки: структура по неделям")
           );
         }
-
-        if (loadCards) {
-          const loadTiles = [
-            createKpiTile({
-              title: "Загрузка",
-              value: monthValues.load_percent,
-              unit: getMetricUnit("load_percent"),
-              lines: ["Среднее за месяц"],
-            }),
-            createKpiTile({
-              title: "Выручка / %",
-              value: monthValues.revenue_per_load,
-              unit: getMetricUnit("revenue_per_load"),
-              lines: ["Коворкинг"],
-            }),
-            createKpiTile({
-              title: "Кофейня / %",
-              value: monthValues.coffee_revenue_per_load,
-              unit: getMetricUnit("coffee_revenue_per_load"),
-              lines: ["Кофейня"],
-            }),
-          ];
-          loadCards.innerHTML = "";
-          loadTiles.forEach((tile) => loadCards.appendChild(tile));
-        }
-
-        if (loadLineChart) {
-          const series = [
-            {
-              label: "Загрузка",
-              values: weeklyValues.load_percent || [],
-              color: "#3a3a3a",
-            },
-            {
-              label: "Аренда",
-              values: weeklyValues.revenue_open_space || [],
-              color: "#d99a83",
-            },
-          ];
-          renderChartCard(loadLineChart, "Загрузка vs аренда", createMultiLine(series));
-        }
-
-        if (loadScatterOpen) {
-          const points = (weeklyValues.load_percent || []).map((val, idx) => ({
-            x: val,
-            y: (weeklyValues.revenue_open_space || [])[idx],
-          }));
-          renderChartCard(loadScatterOpen, "Scatter: загрузка vs аренда", createScatter(points, "#d99a83"));
-        }
-
-        if (loadScatterCoffee) {
-          const points = (weeklyValues.load_percent || []).map((val, idx) => ({
-            x: val,
-            y: (weeklyValues.coffee_revenue_total || [])[idx],
-          }));
-          renderChartCard(loadScatterCoffee, "Scatter: загрузка vs кофейня", createScatter(points, "#3a3a3a"));
-        }
-
-        if (writeoffChart) {
-          const series = [
-            {
-              label: "Продажи еды",
-              values: weeklyValues.sold_food_total || [],
-              color: "#d99a83",
-            },
-            {
-              label: "Порча",
-              values: weeklyValues.written_off_food_total || [],
-              color: "#8b1e1e",
-            },
-            {
-              label: "Доля порчи",
-              values: weeklyValues.writeoff_rate_full || [],
-              color: "#3a3a3a",
-            },
-          ];
-          renderChartCard(writeoffChart, "Списания и порча", createMultiLine(series));
-        }
-
-        if (writeoffStats) {
-          const writeoffAvg = (weeklyValues.writeoff_rate_full || []).filter((v) => typeof v === "number");
-          const avg = writeoffAvg.length ? writeoffAvg.reduce((a, b) => a + b, 0) / writeoffAvg.length : null;
-          const rows = [
-            [{ text: "Текущая доля" }, buildValueCell(weekValues.writeoff_rate_full, (value) => formatAuto(value, "pct_ratio"))],
-            [{ text: "Среднее 8 недель" }, buildValueCell(avg, (value) => formatAuto(value, "pct_ratio"))],
-            [{ text: "Норматив" }, { text: "10%" }],
-          ];
-          writeoffStats.innerHTML = "";
-          writeoffStats.appendChild(buildMiniTable(["Показатель", "Значение"], rows));
-        }
-
-        if (cashLineChart) {
-          const series = [
-            {
-              label: "Наличные",
-              values: weeklyValues.revenue_cash || [],
-              color: "#d99a83",
-            },
-            {
-              label: "Безналичные",
-              values: weeklyValues.revenue_cashless || [],
-              color: "#3a3a3a",
-            },
-          ];
-          renderChartCard(cashLineChart, "Динамика оплат", createMultiLine(series));
-        }
-
-        if (cashBarsChart) {
-          cashBarsChart.innerHTML = "";
-          cashBarsChart.appendChild(
-            createStackedRows(weeks, weeklyValues, ["deposit_total", "withdrawals_total"], "Внесения и изъятия")
-          );
-        }
-
-        if (cashControlTable) {
-          const rows = (data.cash_control || []).slice(-10).map((item) => {
-            const diffSafe = valueOrZero(item.diff);
-            return [
-              { text: item.date },
-              buildValueCell(item.expected, (value) => formatAuto(value, "rub")),
-              buildValueCell(item.actual, (value) => formatAuto(value, "rub")),
-              { text: formatSigned(diffSafe), className: deltaClass(diffSafe) },
-            ];
-          });
-          cashControlTable.innerHTML = "";
-          cashControlTable.appendChild(buildMiniTable(["Дата", "Ожидалось", "Факт", "Δ"], rows));
-        }
-
-        if (expenseLineChart) {
-          const series = [
-            {
-              label: "Расходы всего",
-              values: weeklyValues.total_expenses || [],
-              color: "#8b1e1e",
-            },
-          ];
-          renderChartCard(expenseLineChart, "Расходы", createMultiLine(series));
-        }
-
-        if (expenseStackChart) {
-          expenseStackChart.innerHTML = "";
-          expenseStackChart.appendChild(
-            createStackedRows(weeks, weeklyValues, EXPENSE_CODES, "Структура расходов")
-          );
-        }
-
-        if (expenseRatioChart) {
-          renderChartCard(
-            expenseRatioChart,
-            "Доля расходов от выручки",
-            createSparkline(weeklyValues.expense_ratio || [], "#8b1e1e")
-          );
-        }
-
-        if (profitChart) {
-          renderChartCard(
-            profitChart,
-            "Операционная прибыль",
-            createSparkline(weeklyValues.operating_profit || [], "#1f5e46")
-          );
-        }
-
-        if (marginChart) {
-          renderChartCard(
-            marginChart,
-            "Операционная маржа",
-            createSparkline(weeklyValues.operating_margin || [], "#1f5e46")
-          );
-        }
-
-        if (signalsTable) {
-          const rows = (data.signals || []).map((signal) => {
-            if (signal.message) {
-              const countSafe = valueOrZero(signal.count);
-              return [
-                { text: signal.message },
-                {
-                  text: String(countSafe),
-                  className: countSafe === 0 ? "zero-value" : "",
-                },
-                { text: "" },
-                { text: "" },
-                {
-                  text: signal.status === "alert" ? "ALERT" : "OK",
-                  className: signal.status === "alert" ? "delta-negative" : "delta-positive",
-                },
-              ];
-            }
-            const unit = getMetricUnit(signal.code);
-            const deltaSafe = valueOrZero(signal.delta_pct);
-            return [
-              { text: getMetricLabel(signal.code) },
-              buildValueCell(signal.current, (value) => formatAuto(value, unit)),
-              {
-                text: formatSignedPercent(deltaSafe),
-                className: deltaClass(deltaSafe),
-              },
-              { text: signal.threshold ? `-${signal.threshold}%` : "" },
-              {
-                text: signal.status === "alert" ? "ALERT" : "OK",
-                className: signal.status === "alert" ? "delta-negative" : "delta-positive",
-              },
-            ];
-          });
-          const header = ["Сигнал", "Текущее", "Δ%", "Порог", "Статус"];
-          signalsTable.innerHTML = "";
-          signalsTable.appendChild(buildMiniTable(header, rows));
-        }
       }
 
       async function loadOverview() {
         if (!state.branchCode || !state.month) {
-          renderEmpty(overviewKpis, "Нет данных");
+          renderOverview(null);
           return;
         }
         renderEmpty(overviewKpis, "Загрузка данных...");
+        renderEmpty(coeffKpis, "Загрузка данных...");
+        renderChecks(checksList, [], "Загрузка данных...");
+        renderChecks(coffeeTrigger, [], "Загрузка данных...");
         try {
           const data = await fetchJSON(
             `/api/cuteam/overview?branch_code=${encodeURIComponent(state.branchCode)}&month=${encodeURIComponent(
@@ -2102,6 +1964,7 @@
           renderOverview(data);
         } catch (err) {
           console.error(err);
+          renderOverview(null);
           renderEmpty(overviewKpis, "Не удалось загрузить обзор");
         }
       }
@@ -2295,11 +2158,11 @@
         headRow.appendChild(thB);
 
         const thDelta = document.createElement("th");
-        thDelta.textContent = "Δ";
+        thDelta.textContent = "Изм.";
         headRow.appendChild(thDelta);
 
         const thDeltaPct = document.createElement("th");
-        thDeltaPct.textContent = "Δ%";
+        thDeltaPct.textContent = "Изм. %";
         headRow.appendChild(thDeltaPct);
 
         thead.appendChild(headRow);
@@ -2365,8 +2228,8 @@
           "Показатель",
           formatMonthLabel(base.month),
           formatMonthLabel(compare.month),
-          "Δ",
-          "Δ%",
+          "Изм.",
+          "Изм. %",
         ];
         const lines = [header.join("	")];
         metrics.forEach((metric) => {
@@ -2928,12 +2791,6 @@
       compareMonthSelect.addEventListener("change", (event) => {
         state.compareMonth = event.target.value;
         loadComparison();
-      });
-
-      document.querySelectorAll('input[name="scale"]').forEach((radio) => {
-        radio.addEventListener("change", (event) => {
-          state.scale = event.target.value;
-        });
       });
 
       (async function init() {

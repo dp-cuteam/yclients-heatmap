@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import sqlite3
 from functools import lru_cache
 from typing import Dict, List
 
@@ -128,10 +129,25 @@ def fetch_hairdresser_daily_load(
     )
     params = [branch_id, start_date, end_date, *group_ids]
 
+    rows = None
     try:
         with get_heatmap_conn() as conn:
             rows = conn.execute(sql, params).fetchall()
     except Exception:
+        rows = None
+
+    if rows is None:
+        try:
+            db_path = settings.heatmap_db_path
+            if db_path.exists():
+                raw = sqlite3.connect(str(db_path))
+                raw.row_factory = sqlite3.Row
+                rows = raw.execute(sql, params).fetchall()
+                raw.close()
+        except Exception:
+            return {}
+
+    if not rows:
         return {}
 
     by_date: Dict[str, List[float]] = {}
@@ -152,6 +168,7 @@ def fetch_hairdresser_daily_load(
     for day in _daterange(start, end):
         key = day.isoformat()
         vals = by_date.get(key, [])
-        avg = round(sum(vals) / len(vals), 2) if vals else 0.0
-        daily[key] = avg
+        if not vals:
+            continue
+        daily[key] = round(sum(vals) / len(vals), 2)
     return daily

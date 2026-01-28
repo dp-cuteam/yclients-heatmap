@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import datetime as dt
 from typing import Any, Dict, List, Optional
@@ -268,34 +268,16 @@ def _fetch_branch(branch_code: str) -> Optional[Dict[str, Any]]:
     return {"code": row["code"], "name": name_map.get(row["code"], row["name"])}
 
 
+
 def build_overview_payload(branch_code: str, month: str) -> Dict[str, Any]:
     init_schema()
     branch_code = (_normalize_branch_code(branch_code) or branch_code).strip()
     month_start = _parse_month(month)
     month_end = _month_end(month_start)
-
-    last_week_start = _week_start(month_end)
-    last_week_end = last_week_start + dt.timedelta(days=6)
-    prev_week_start = last_week_start - dt.timedelta(days=7)
-    prev_week_end = last_week_end - dt.timedelta(days=7)
-
-    yoy_week_start = last_week_start - dt.timedelta(days=364)
-    yoy_week_end = last_week_end - dt.timedelta(days=364)
-
-    last_4w_start = last_week_start - dt.timedelta(days=21)
-    last_4w_end = last_week_end
-    prev_4w_start = last_4w_start - dt.timedelta(days=28)
-    prev_4w_end = last_4w_end - dt.timedelta(days=28)
-    yoy_4w_start = last_4w_start - dt.timedelta(days=364)
-    yoy_4w_end = last_4w_end - dt.timedelta(days=364)
-
-    prev_month_start = _prev_month_start(month_start)
-    prev_month_end = _month_end(prev_month_start)
     yoy_month_start = dt.date(month_start.year - 1, month_start.month, 1)
-    yoy_month_end = _month_end(yoy_month_start)
 
-    analysis_start = min(prev_4w_start, yoy_4w_start, yoy_month_start, prev_week_start, yoy_week_start)
-    analysis_end = max(month_end, last_week_end, prev_week_end)
+    analysis_start = min(month_start - dt.timedelta(days=56), yoy_month_start)
+    analysis_end = month_end
 
     values_map = _fetch_values(
         branch_code,
@@ -304,279 +286,254 @@ def build_overview_payload(branch_code: str, month: str) -> Dict[str, Any]:
         BASE_CODES,
     )
 
-    month_values = _period_values(values_map, month_start, month_end)
-    prev_month_values = _period_values(values_map, prev_month_start, prev_month_end)
-    yoy_month_values = _period_values(values_map, yoy_month_start, yoy_month_end)
-
-    last_week_values = _period_values(values_map, last_week_start, last_week_end)
-    prev_week_values = _period_values(values_map, prev_week_start, prev_week_end)
-    yoy_week_values = _period_values(values_map, yoy_week_start, yoy_week_end)
-
-    last_4w_values = _period_values(values_map, last_4w_start, last_4w_end)
-    prev_4w_values = _period_values(values_map, prev_4w_start, prev_4w_end)
-    yoy_4w_values = _period_values(values_map, yoy_4w_start, yoy_4w_end)
-
     daily_dates = _daterange(month_start, month_end)
-    daily_values: Dict[str, List[Optional[float]]] = {code: [] for code in BASE_CODES}
-    derived_daily: Dict[str, List[Optional[float]]] = {
-        "avg_check": [],
-        "writeoff_rate": [],
-        "writeoff_rate_full": [],
-        "lab_to_open_space_ratio": [],
-        "revenue_per_load": [],
-        "coffee_revenue_per_load": [],
-        "total_expenses": [],
-        "expense_ratio": [],
-        "gross_profit": [],
-        "operating_profit": [],
-        "operating_margin": [],
-        "coworking_total": [],
-    }
+    cutoff_codes = [code for code in BASE_CODES if code != "load_percent"]
+    filled_days: List[dt.date] = []
     for day in daily_dates:
-        day_values = {
-            code: values_map.get(code, {}).get(day.isoformat()) for code in BASE_CODES
-        }
-        for code in BASE_CODES:
-            daily_values[code].append(day_values.get(code))
-        derived = _compute_derived(day_values)
-        for key in derived_daily:
-            derived_daily[key].append(derived.get(key))
+        day_iso = day.isoformat()
+        if any(values_map.get(code, {}).get(day_iso) is not None for code in cutoff_codes):
+            filled_days.append(day)
 
-    weekly_ranges = _last_n_weeks(month_end, 8)
+    cutoff_day = max((day.day for day in filled_days), default=0)
+    days_in_month = len(daily_dates)
+    cutoff_date = month_start + dt.timedelta(days=cutoff_day - 1) if cutoff_day else None
+    range_label = f"1–{cutoff_day}" if cutoff_day else ""
+
+    if cutoff_day:
+        current_values = _period_values(values_map, month_start, cutoff_date)
+        yoy_end = yoy_month_start + dt.timedelta(days=cutoff_day - 1)
+        yoy_values = _period_values(values_map, yoy_month_start, yoy_end)
+    else:
+        current_values = {}
+        yoy_values = {}
+
+    def _delta_for(code: str) -> Dict[str, Optional[float]]:
+        return _delta(current_values.get(code), yoy_values.get(code))
+
+    cutoff_for_weeks = cutoff_date or month_end
+    weekly_ranges = _last_n_weeks(cutoff_for_weeks, 8)
     weekly_values: Dict[str, List[Optional[float]]] = {code: [] for code in BASE_CODES}
-    derived_weekly: Dict[str, List[Optional[float]]] = {
-        "avg_check": [],
-        "writeoff_rate": [],
-        "writeoff_rate_full": [],
-        "lab_to_open_space_ratio": [],
-        "revenue_per_load": [],
-        "coffee_revenue_per_load": [],
-        "total_expenses": [],
-        "expense_ratio": [],
-        "gross_profit": [],
-        "operating_profit": [],
-        "operating_margin": [],
-        "coworking_total": [],
-    }
     for week in weekly_ranges:
         period = _period_values(values_map, week["start"], week["end"])
         for code in BASE_CODES:
             weekly_values[code].append(period.get(code))
-        for key in derived_weekly:
-            derived_weekly[key].append(period.get(key))
 
-    monthly_ranges = _last_n_months(month_start, 12)
-    monthly_values: Dict[str, List[Optional[float]]] = {"revenue_total": [], "coffee_revenue_total": []}
-    for month_start_item in monthly_ranges:
-        month_end_item = _month_end(month_start_item)
-        period = _period_values(values_map, month_start_item, month_end_item)
-        monthly_values["revenue_total"].append(period.get("revenue_total"))
-        monthly_values["coffee_revenue_total"].append(period.get("coffee_revenue_total"))
+    avg8_load = _avg([v for v in weekly_values.get("load_percent", []) if v is not None])
+    avg8_open = _avg([v for v in weekly_values.get("revenue_open_space", []) if v is not None])
+    avg8_coffee = _avg([v for v in weekly_values.get("coffee_revenue_total", []) if v is not None])
 
-    overview = {
-        "revenue_total": {
-            "value": month_values.get("revenue_total"),
-            "wow": _delta(last_week_values.get("revenue_total"), prev_week_values.get("revenue_total")),
-            "yoy": _delta(month_values.get("revenue_total"), yoy_month_values.get("revenue_total")),
-        },
-        "coworking_total": {
-            "value": month_values.get("coworking_total"),
-        },
-        "coffee_total": {
-            "value": month_values.get("coffee_revenue_total"),
-            "checks": month_values.get("coffee_checks"),
-            "avg_check": month_values.get("avg_check"),
-        },
-        "load_percent": {
-            "value": month_values.get("load_percent"),
-        },
-        "writeoff": {
-            "value": month_values.get("written_off_food_total"),
-            "rate": month_values.get("writeoff_rate"),
-        },
-    }
+    cash_control: List[Dict[str, Any]] = []
+    cash_threshold = 1000
+    if cutoff_day:
+        mtd_dates = daily_dates[:cutoff_day]
+        cash_series = values_map.get("cash_balance_end_day", {})
+        cash_rev = values_map.get("revenue_cash", {})
+        cash_dep = values_map.get("deposit_total", {})
+        cash_with = values_map.get("withdrawals_total", {})
+        for idx, day in enumerate(mtd_dates):
+            if idx == 0:
+                continue
+            day_iso = day.isoformat()
+            prev_iso = mtd_dates[idx - 1].isoformat()
+            actual = cash_series.get(day_iso)
+            prev_balance = cash_series.get(prev_iso)
+            if actual is None or prev_balance is None:
+                continue
+            expected = prev_balance
+            expected += cash_rev.get(day_iso, 0.0)
+            expected += cash_dep.get(day_iso, 0.0)
+            expected -= cash_with.get(day_iso, 0.0)
+            diff = actual - expected
+            if abs(diff) >= cash_threshold:
+                cash_control.append(
+                    {
+                        "date": day_iso,
+                        "expected": expected,
+                        "actual": actual,
+                        "diff": diff,
+                    }
+                )
 
-    revenue_compare_rows = []
-    for code in ["revenue_total", "revenue_cashless", "revenue_cash"]:
-        current = month_values.get(code)
-        previous = prev_month_values.get(code)
-        yoy = yoy_month_values.get(code)
-        delta = _delta(current, previous)
-        revenue_compare_rows.append(
+    drivers_source = [
+        ("revenue_open_space", "Аренда"),
+        ("revenue_cabinets", "Кабинеты"),
+        ("revenue_lecture", "Лекторий"),
+        ("revenue_lab", "Лаборатория"),
+        ("revenue_retail", "Ритейл"),
+        ("revenue_salon", "Услуги салона"),
+        ("revenue_drinks_total", "Напитки"),
+        ("sold_food_total", "Еда"),
+        ("revenue_desserts", "Десерты"),
+    ]
+    drivers: List[Dict[str, Any]] = []
+    for code, label in drivers_source:
+        delta = _delta_for(code)
+        delta_value = delta.get("delta")
+        delta_pct = delta.get("pct")
+        if delta_value is None or delta_pct is None:
+            continue
+        if delta_value <= 0:
+            continue
+        drivers.append(
             {
                 "code": code,
-                "current": current,
-                "previous": previous,
-                "yoy": yoy,
-                "delta_pct": delta.get("pct"),
+                "label": label,
+                "delta": delta_value,
+                "pct": delta_pct,
+            }
+        )
+    drivers.sort(key=lambda item: item["delta"], reverse=True)
+    drivers = drivers[:3]
+
+    alerts: List[Dict[str, Any]] = []
+    if cash_control:
+        max_diff = max((abs(item["diff"]) for item in cash_control), default=0)
+        alerts.append(
+            {
+                "type": "cash",
+                "count": len(cash_control),
+                "max_diff": max_diff,
             }
         )
 
-    best_week = None
-    if weekly_values.get("revenue_total"):
-        best_week = max(
-            (value for value in weekly_values["revenue_total"] if value is not None),
-            default=None,
+    writeoff_rate = current_values.get("writeoff_rate_full")
+    if writeoff_rate is not None and writeoff_rate > 0.10:
+        alerts.append(
+            {
+                "type": "writeoff",
+                "rate": writeoff_rate,
+            }
         )
-    best_month = None
-    if monthly_values.get("revenue_total"):
-        best_month = max(
-            (value for value in monthly_values["revenue_total"] if value is not None),
-            default=None,
-        )
-    best_4w = None
-    rev_weeks = weekly_values.get("revenue_total") or []
-    if len(rev_weeks) >= 4:
-        sums: List[float] = []
-        for idx in range(len(rev_weeks) - 3):
-            window = [v for v in rev_weeks[idx : idx + 4] if v is not None]
-            if len(window) < 4:
-                continue
-            sums.append(float(sum(window)))
-        if sums:
-            best_4w = max(sums)
 
-    period_compare = [
-        {
-            "label": "Неделя",
-            "current": last_week_values.get("revenue_total"),
-            "previous": prev_week_values.get("revenue_total"),
-            "yoy": yoy_week_values.get("revenue_total"),
-            "best": best_week,
-        },
-        {
-            "label": "4 недели",
-            "current": last_4w_values.get("revenue_total"),
-            "previous": prev_4w_values.get("revenue_total"),
-            "yoy": yoy_4w_values.get("revenue_total"),
-            "best": best_4w,
-        },
-        {
-            "label": "Месяц",
-            "current": month_values.get("revenue_total"),
-            "previous": prev_month_values.get("revenue_total"),
-            "yoy": yoy_month_values.get("revenue_total"),
-            "best": best_month,
-        },
-    ]
-
-    cash_control: List[Dict[str, Any]] = []
-    cash_series = values_map.get("cash_balance_end_day", {})
-    cash_rev = values_map.get("revenue_cash", {})
-    cash_dep = values_map.get("deposit_total", {})
-    cash_with = values_map.get("withdrawals_total", {})
-    for idx, day in enumerate(daily_dates):
-        if idx == 0:
-            continue
-        day_iso = day.isoformat()
-        prev_iso = daily_dates[idx - 1].isoformat()
-        actual = cash_series.get(day_iso)
-        prev_balance = cash_series.get(prev_iso)
-        if actual is None or prev_balance is None:
-            continue
-        expected = prev_balance
-        expected += cash_rev.get(day_iso, 0.0)
-        expected += cash_dep.get(day_iso, 0.0)
-        expected -= cash_with.get(day_iso, 0.0)
-        diff = actual - expected
-        if abs(diff) >= 1:
-            cash_control.append(
+    current_load = current_values.get("load_percent")
+    current_open = current_values.get("revenue_open_space")
+    if (
+        current_load is not None
+        and avg8_load is not None
+        and current_open is not None
+        and avg8_open is not None
+    ):
+        if current_load >= avg8_load and current_open <= avg8_open * 0.9:
+            alerts.append(
                 {
-                    "date": day_iso,
-                    "expected": expected,
-                    "actual": actual,
-                    "diff": diff,
+                    "type": "load_open",
+                    "load": current_load,
+                    "load_avg": avg8_load,
+                    "value": current_open,
+                    "avg": avg8_open,
                 }
             )
 
-    signals: List[Dict[str, Any]] = []
-    thresholds = {
-        "revenue_total": 10,
-        "revenue_open_space": 12,
-        "revenue_lab": 12,
-        "coffee_revenue_total": 10,
-        "coffee_checks": 8,
-        "avg_check": 8,
-        "writeoff_rate_full": 10,
-        "expense_staff_salary": 10,
-        "expense_food_purchase": 10,
-    }
-    wow_values = _period_values(values_map, prev_week_start, prev_week_end)
-    current_values = _period_values(values_map, last_week_start, last_week_end)
-    for code, threshold in thresholds.items():
-        current = current_values.get(code)
-        prev = wow_values.get(code)
-        delta = _delta(current, prev)
-        pct = delta.get("pct")
-        status = "ok"
-        if pct is not None and pct < -threshold:
-            status = "alert"
-        signals.append(
-            {
-                "code": code,
-                "current": current,
-                "previous": prev,
-                "delta_pct": pct,
-                "threshold": threshold,
-                "status": status,
-            }
-        )
+    current_coffee = current_values.get("coffee_revenue_total")
+    if (
+        current_load is not None
+        and avg8_load is not None
+        and current_coffee is not None
+        and avg8_coffee is not None
+    ):
+        if current_load >= avg8_load and current_coffee <= avg8_coffee * 0.9:
+            alerts.append(
+                {
+                    "type": "load_coffee",
+                    "load": current_load,
+                    "load_avg": avg8_load,
+                    "value": current_coffee,
+                    "avg": avg8_coffee,
+                }
+            )
+
+    alerts = alerts[:3]
+
+    checks: List[Dict[str, Any]] = []
     if cash_control:
-        signals.append(
+        max_diff = max((abs(item["diff"]) for item in cash_control), default=0)
+        checks.append(
             {
-                "code": "cash_balance_end_day",
+                "key": "cash",
+                "title": "Проверка кассы",
                 "status": "alert",
-                "message": "Есть расхождения в кассовой логике",
                 "count": len(cash_control),
+                "max_diff": max_diff,
             }
         )
+    else:
+        checks.append(
+            {
+                "key": "cash",
+                "title": "Проверка кассы",
+                "status": "ok" if cutoff_day else "no_data",
+                "count": 0,
+                "max_diff": None,
+            }
+        )
+
+    load_open_status = "no_data"
+    if current_load is not None and avg8_load is not None and current_open is not None and avg8_open is not None:
+        load_open_status = "alert" if (current_load >= avg8_load and current_open <= avg8_open * 0.9) else "ok"
+    checks.append(
+        {
+            "key": "load_open",
+            "title": "Высокая загрузка, низкая аренда",
+            "status": load_open_status,
+            "load": current_load,
+            "load_avg": avg8_load,
+            "value": current_open,
+            "avg": avg8_open,
+        }
+    )
+
+    load_coffee_status = "no_data"
+    if current_load is not None and avg8_load is not None and current_coffee is not None and avg8_coffee is not None:
+        load_coffee_status = "alert" if (current_load >= avg8_load and current_coffee <= avg8_coffee * 0.9) else "ok"
+    checks.append(
+        {
+            "key": "load_coffee",
+            "title": "Высокая загрузка, слабая кофейня",
+            "status": load_coffee_status,
+            "load": current_load,
+            "load_avg": avg8_load,
+            "value": current_coffee,
+            "avg": avg8_coffee,
+        }
+    )
 
     return {
         "branch": _fetch_branch(branch_code),
         "month": month,
-        "periods": {
-            "month": {"start": month_start.isoformat(), "end": month_end.isoformat()},
-            "prev_month": {"start": prev_month_start.isoformat(), "end": prev_month_end.isoformat()},
-            "yoy_month": {"start": yoy_month_start.isoformat(), "end": yoy_month_end.isoformat()},
-            "last_week": {"start": last_week_start.isoformat(), "end": last_week_end.isoformat()},
-            "prev_week": {"start": prev_week_start.isoformat(), "end": prev_week_end.isoformat()},
-            "yoy_week": {"start": yoy_week_start.isoformat(), "end": yoy_week_end.isoformat()},
-            "last_4w": {"start": last_4w_start.isoformat(), "end": last_4w_end.isoformat()},
-            "prev_4w": {"start": prev_4w_start.isoformat(), "end": prev_4w_end.isoformat()},
-            "yoy_4w": {"start": yoy_4w_start.isoformat(), "end": yoy_4w_end.isoformat()},
+        "mtd": {
+            "cutoff_day": cutoff_day,
+            "days_in_month": days_in_month,
+            "filled_days": len(filled_days),
+            "range_label": range_label,
+            "current": current_values,
+            "yoy": yoy_values,
         },
-        "period_values": {
-            "week": last_week_values,
-            "prev_week": prev_week_values,
-            "yoy_week": yoy_week_values,
-            "four_weeks": last_4w_values,
-            "prev_four_weeks": prev_4w_values,
-            "yoy_four_weeks": yoy_4w_values,
-            "month": month_values,
-            "prev_month": prev_month_values,
-            "yoy_month": yoy_month_values,
+        "yoy_delta": {
+            "revenue_total": _delta_for("revenue_total"),
+            "coworking_total": _delta_for("coworking_total"),
+            "coffee_revenue_total": _delta_for("coffee_revenue_total"),
+            "load_percent": _delta_for("load_percent"),
+            "written_off_food_total": _delta_for("written_off_food_total"),
         },
-        "daily": {
-            "dates": [d.isoformat() for d in daily_dates],
-            "values": {**daily_values, **derived_daily},
+        "coefficients": {
+            "avg_check": current_values.get("avg_check"),
+            "writeoff_rate": current_values.get("writeoff_rate_full"),
+            "lab_to_open_space_ratio": current_values.get("lab_to_open_space_ratio"),
         },
+        "drivers": drivers,
+        "alerts": alerts,
+        "checks": checks,
+        "cash_control": cash_control,
         "weekly": {
             "weeks": [
-                {
-                    "start": week["start"].isoformat(),
-                    "end": week["end"].isoformat(),
-                }
+                {"start": week["start"].isoformat(), "end": week["end"].isoformat()}
                 for week in weekly_ranges
             ],
-            "values": {**weekly_values, **derived_weekly},
+            "values": weekly_values,
         },
-        "monthly": {
-            "months": [m.strftime("%Y-%m") for m in monthly_ranges],
-            "values": monthly_values,
+        "averages": {
+            "load_percent": avg8_load,
+            "revenue_open_space": avg8_open,
+            "coffee_revenue_total": avg8_coffee,
         },
-        "overview": overview,
-        "revenue_compare": revenue_compare_rows,
-        "period_compare": period_compare,
-        "cash_control": cash_control,
-        "signals": signals,
     }
