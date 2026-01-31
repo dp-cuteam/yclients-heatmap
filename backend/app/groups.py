@@ -34,10 +34,7 @@ def _needs_display_name(branch: dict) -> bool:
 
 
 def ensure_branch_names(config: dict) -> dict:
-    global _branch_names_checked
-    if _branch_names_checked:
-        return config
-    _branch_names_checked = True
+    # Removed global flag to allow retrying on transient failures
     branches = config.get("branches") or []
     targets = [b for b in branches if _needs_display_name(b)]
     if not targets:

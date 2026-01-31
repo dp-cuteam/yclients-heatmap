@@ -82,8 +82,12 @@ class YClientsClient:
                     json=json_body,
                     timeout=self.timeout,
                 )
-                data = resp.json() if resp.text else {}
-                
+                try:
+                    data = resp.json() if resp.text else {}
+                except Exception:
+                    _log_api_call(method, url, params, json_body, resp.status_code, resp.text, error="json_decode_error")
+                    raise RuntimeError(f"YCLIENTS request failed: {resp.text[:1000]}")
+
                 # Log all PUT/POST requests to visits, goods_transactions, and consumables for debugging
                 if method in ("PUT", "POST") and ("/visits/" in path or "/goods_transactions/" in path or "/consumables/" in path):
                     _log_api_call(method, url, params, json_body, resp.status_code, data)

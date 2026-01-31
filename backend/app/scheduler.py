@@ -20,6 +20,14 @@ def _daily_job():
     tz = ZoneInfo(settings.timezone)
     target = (datetime.now(tz=tz) - timedelta(days=1)).date()
     run_daily(client, target_day=target)
+    
+    # Task 3: Sync indicators (Google Sheet)
+    try:
+        from src.features.cuteam.admin_service import start_sync
+        # Fire and forget sync (runs in thread/subprocess)
+        start_sync([], dry_run=False)()
+    except Exception:
+        logging.getLogger("scheduler").exception("Failed to start indicators sync")
 
 
 def start_scheduler() -> None:

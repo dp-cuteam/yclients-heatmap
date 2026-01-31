@@ -287,11 +287,13 @@ def build_overview_payload(branch_code: str, month: str) -> Dict[str, Any]:
     )
 
     daily_dates = _daterange(month_start, month_end)
-    cutoff_codes = [code for code in BASE_CODES if code != "load_percent"]
+    # Filter filled days based on revenue presence to determine progress
+    # This prevents counting days where only minor expenses occurred as "passed"
+    revenue_codes = ["revenue_total", "revenue_cash", "revenue_cashless"]
     filled_days: List[dt.date] = []
     for day in daily_dates:
         day_iso = day.isoformat()
-        if any(values_map.get(code, {}).get(day_iso) is not None for code in cutoff_codes):
+        if any(values_map.get(code, {}).get(day_iso) is not None for code in revenue_codes):
             filled_days.append(day)
 
     cutoff_day = max((day.day for day in filled_days), default=0)

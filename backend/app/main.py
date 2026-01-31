@@ -599,9 +599,28 @@ def dashboard(request: Request):
     if not request.session.get("user"):
         return RedirectResponse("/login", status_code=302)
     branch_start = settings.branch_start_date.isoformat() if settings.branch_start_date else ""
+    if settings.branch_start_date and settings.branch_start_date > dt.date.today():
+         branch_start = settings.branch_start_date.isoformat()
     return templates.TemplateResponse(
         "dashboard.html",
         {"request": request, "branch_start_date": branch_start},
+    )
+
+
+@app.get("/daily-report", response_class=HTMLResponse)
+def daily_report_page(request: Request):
+    if not request.session.get("user"):
+        return RedirectResponse("/login", status_code=302)
+    config = ensure_branch_names(load_group_config())
+    branches = [
+        {"id": int(b["branch_id"]), "name": b.get("display_name") or b["branch_id"]}
+        for b in config.get("branches", [])
+    ]
+    # Sort branches by name
+    branches.sort(key=lambda x: x["name"])
+    return templates.TemplateResponse(
+        "daily_report.html",
+        {"request": request, "branches": branches}
     )
 
 @app.get("/historical", response_class=HTMLResponse)
@@ -1757,6 +1776,24 @@ def api_full_last(request: Request):
         branch["last_status"] = record.get("status") if record else None
         branch["last_full"] = (record or {}).get("finished_at") or (record or {}).get("started_at")
     return {"branches": branches}
+
+
+@app.get("/api/daily-report")
+def api_daily_report(request: Request, branch_id: int, date: str):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        dt_date = dt.date.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format (YYYY-MM-DD)")
+    
+    from .daily_report_service import get_daily_report
+    try:
+        report = get_daily_report(branch_id, dt_date)
+        return report
+    except Exception as exc:
+        logging.exception("Daily report failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/health")

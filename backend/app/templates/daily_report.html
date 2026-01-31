@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Daily Report — CUTEAM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/static/styles.css" rel="stylesheet">
+    <style>
+        .report-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .controls select, .controls input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-primary:disabled {
+            background: #ccc;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error { color: red; margin-top: 10px; }
+        .loading { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="header-left">
+        <a href="/" class="nav-link">Daashboard</a>
+        <a href="/mini" class="nav-link">Mini App</a>
+        <a href="/admin" class="nav-link">Admin</a>
+        <span class="nav-link active">Daily Report</span>
+    </div>
+    <div class="logo">Daily Report</div>
+</div>
+
+<div class="report-container">
+    <h2>Ежедневный отчет</h2>
+    <div class="controls">
+        <select id="branchSelect">
+            {% for b in branches %}
+            <option value="{{ b.id }}">{{ b.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" id="dateInput">
+        <button id="generateBtn" class="btn-primary">Сформировать</button>
+    </div>
+    
+    <div id="status" class="status"></div>
+    <div id="output" style="display:none;">
+        <pre id="reportText"></pre>
+        <button id="copyBtn" class="btn-primary" style="margin-top:10px;">Копировать</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const dateInput = document.getElementById('dateInput');
+        dateInput.valueAsDate = new Date();
+        
+        document.getElementById('generateBtn').addEventListener('click', generateReport);
+        document.getElementById('copyBtn').addEventListener('click', copyReport);
+    });
+
+    async function generateReport() {
+        const branchId = document.getElementById('branchSelect').value;
+        const dateVal = document.getElementById('dateInput').value;
+        const statusEl = document.getElementById('status');
+        const outputEl = document.getElementById('output');
+        const reportTextEl = document.getElementById('reportText');
+        const btn = document.getElementById('generateBtn');
+
+        if (!dateVal) return;
+
+        statusEl.textContent = "Загрузка данных из YClients...";
+        statusEl.className = "loading";
+        outputEl.style.display = "none";
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/daily-report?branch_id=${branchId}&date=${dateVal}`);
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Error");
+            }
+            const data = await res.json();
+            renderReport(data);
+            statusEl.textContent = "";
+        } catch (e) {
+            statusEl.textContent = "Ошибка: " + e.message;
+            statusEl.className = "error";
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function renderReport(data) {
+        // Format report as text
+        const lines = [];
+        lines.push(`Отчет за ${data.date}`);
+        lines.push("----------------");
+        
+        const rev = data.revenue.total || 0;
+        lines.push(`Выручка: ${formatMoney(rev)}`);
+        
+        lines.push("\nРасходы:");
+        let expTotal = 0;
+        for (const [cat, val] of Object.entries(data.expenses)) {
+            lines.push(`- ${cat}: ${formatMoney(val)}`);
+            expTotal += val;
+        }
+        lines.push(`Итого расходы: ${formatMoney(expTotal)}`);
+        
+        lines.push("\nУслуги:");
+        for (const srv of data.services) {
+            lines.push(`- ${srv.name}: ${srv.count} шт. (${formatMoney(srv.revenue)})`);
+        }
+        
+        lines.push("\nПрибыль (Sales - Expenses): " + formatMoney(rev - expTotal));
+
+        document.getElementById('reportText').textContent = lines.join("\n");
+        document.getElementById('output').style.display = "block";
+    }
+
+    function formatMoney(val) {
+        return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(val);
+    }
+    
+    function copyReport() {
+        const text = document.getElementById('reportText').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copyBtn');
+            const old = btn.textContent;
+            btn.textContent = "Скопировано!";
+            setTimeout(() => btn.textContent = old, 1500);
+        });
+    }
+</script>
+</body>
+</html>
